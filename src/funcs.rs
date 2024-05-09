@@ -1,6 +1,8 @@
 //! Special functions for the cli that would otherwise be reused multiple times.
 
-use tokio::io::AsyncWriteExt;
+use std::path::Path;
+
+use tokio::{fs::create_dir_all, io::AsyncWriteExt};
 use tokio::fs::File;
 
 use crate::type_defs::api_defs::{LowerQuality, Post, Tags};
@@ -52,5 +54,15 @@ pub fn parse_artists(tags: &Tags) -> String {
         tags.artist[0].to_string()
     } else {
         "unknown-artist".to_string()
+    }
+}
+
+pub async fn create_dl_dir() -> bool {
+    let dir_path = Path::new("./dl/");
+    if !dir_path.exists() {
+        create_dir_all("./dl/").await.expect("Err");
+        true
+    } else {
+        false
     }
 }

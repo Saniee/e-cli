@@ -4,10 +4,9 @@ use std::path::Path;
 
 use reqwest::Client;
 use reqwest::{header::HeaderMap, header::HeaderValue, header::USER_AGENT};
-use tokio::fs::create_dir_all;
 
 use crate::type_defs::api_defs::Posts;
-use crate::funcs::{self, parse_artists};
+use crate::funcs::{self, create_dl_dir, parse_artists};
 
 /// This function takes the arguments of [crate::cli::Commands::DownloadFavourites] and uses them to download the specified amount of media.
 pub async fn download_favourites(username: &String, count: &u8, random: &bool, tags: &String, lower_quality: &bool) -> Option<f64> {
@@ -35,9 +34,10 @@ pub async fn download_favourites(username: &String, count: &u8, random: &bool, t
 
     let data: Posts  = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Err");
 
-    println!("Creating a ./dl/ directory if it doesn't exist...\n");
-    create_dir_all("./dl/").await.expect("Err");
-
+    let created_dir = create_dl_dir().await;
+    if created_dir {
+        println!("Created a ./dl/ directory for all the downloaded files.\n")
+    }
 
     let mut dl_size: f64 = 0.0;
     for post in data.posts {
@@ -71,10 +71,8 @@ pub async fn download_favourites(username: &String, count: &u8, random: &bool, t
     }
 }
 
-/// Thus function takes the arguments of [crate::cli::Commands::DownloadPost] and uses them to download a single post with the specified ID.
+/// This function takes the arguments of [crate::cli::Commands::DownloadPost] and uses them to download a single post with the specified ID.
 pub async fn download_post(post_id: &u64, lower_quality: &bool) -> Option<f64> {
-    println!("Downloading Post: {}\n", post_id.to_string());
-
     let client = Client::builder();
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
@@ -84,15 +82,15 @@ pub async fn download_post(post_id: &u64, lower_quality: &bool) -> Option<f64> {
 
     let data = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Couldn't get json.");
 
-    println!("Creating a ./dl/ directory if it doesn't exist...\n");
-    create_dir_all("./dl/").await.expect("Err");
+    let created_dir = create_dl_dir().await;
+    if created_dir {
+        println!("Created a ./dl/ directory for all the downloaded files.\n")
+    }
 
     let artist_name = parse_artists(&data.posts[0].tags);
 
     let path_string = format!("./dl/{}-{}.{}", artist_name, data.posts[0].id, data.posts[0].file.ext);
     let path = Path::new(&path_string);
-
-    println!("{}", path.to_string_lossy());
 
     println!("Starting download of {}-{}.{}", artist_name, data.posts[0].id, data.posts[0].file.ext);
 
@@ -100,7 +98,7 @@ pub async fn download_post(post_id: &u64, lower_quality: &bool) -> Option<f64> {
         let file_size: f64;
         if *lower_quality {
             println!("Trying to download lower quality file.");
-            file_size = funcs::lower_quality_dl(&data.posts[0], &artist_name).await
+            file_size = funcs::lower_quality_dl(&data.posts[0], &artist_name).await;
         } else {
             file_size = funcs::download(&data.posts[0].file.url, &data.posts[0].file.ext, data.posts[0].id, &artist_name).await;
         }
@@ -108,6 +106,55 @@ pub async fn download_post(post_id: &u64, lower_quality: &bool) -> Option<f64> {
         Some(file_size)
     } else {
         println!("File {}-{}.{} already Exists!\n", artist_name, data.posts[0].id, data.posts[0].file.ext);
+        None
+    }
+}
+
+/// This function accepts an already read file which is done in the main function. It takes a [Vec<&str>] to iter over.
+pub async fn download_posts_from_txt(id_list: Vec<&str>, lower_quality: &bool) -> Option<f64>{
+    println!("Downloading from a .txt file. Number of Id's found: {}\n", id_list.len());
+
+    let client = Client::builder();
+    let mut headers = HeaderMap::new();
+    headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
+    let client = client.default_headers(headers).build().unwrap();
+
+    let created_dir = create_dl_dir().await;
+    if created_dir {
+        println!("Created a ./dl/ directory for all the downloaded files.\n")
+    }
+
+    let mut dl_size: f64 = 0.0;
+    for id in id_list.iter() {
+        let target: String = format!("https://e621.net/posts.json?tags=id:{}", &id);
+
+        let data = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Err");
+
+        let artist_name = parse_artists(&data.posts[0].tags);
+
+        let path_string = format!("./dl/{}-{}.{}", artist_name, data.posts[0].id, data.posts[0].file.ext);
+        let path = Path::new(&path_string);
+
+        println!("Starting download of {}-{}.{}", artist_name, data.posts[0].id, data.posts[0].file.ext);
+
+        if !path.exists() {
+            let file_size: f64;
+            if *lower_quality {
+                println!("Trying to download lower quality file.");
+                file_size = funcs::lower_quality_dl(&data.posts[0], &artist_name).await;
+            } else {
+                file_size = funcs::download(&data.posts[0].file.url, &data.posts[0].file.ext, data.posts[0].id, &artist_name).await;
+            }
+            println!("Downloaded {}-{}.{}! File size: {:.2} KB\n", artist_name, data.posts[0].id, data.posts[0].file.ext, file_size/1024.0);
+            dl_size += file_size;
+        } else {
+            println!("File {}-{}.{} already Exists!\n", artist_name, data.posts[0].id, data.posts[0].file.ext);
+        }
+    }
+
+    if dl_size > 0.0 {
+        Some(dl_size)
+    } else {
         None
     }
 }

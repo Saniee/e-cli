@@ -88,6 +88,29 @@
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! ## E-Tools
 //! The command line tool for downloading E-Posts from a certain site.
 //! 
@@ -96,10 +119,10 @@
 //! What it can do:
 //! - [x] Downloading Favourites of a user.
 //! - [x] Downloading a single post from the site.
+//! - [x] Downloading of multiple specific posts from a txt file
 //! 
 //! What it cannot do (so far):
 //! - [ ] Downloading multiple pages
-//! - [ ] Downloading of multiple specific posts from a txt file
 //! 
 //! ## Usage
 //! 
@@ -123,7 +146,7 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cli::Commands;
 <span class="kw">use </span>commands::{download_favourites, download_post};
-<span class="kw">use </span>tokio::{fs::remove_dir_all, time::Instant};
+<span class="kw">use </span>tokio::{fs, time::Instant};
 
 <span class="kw">pub mod </span>funcs;
 <span class="kw">pub mod </span>commands;
@@ -141,7 +164,7 @@
     <span class="kw">match </span><span class="kw-2">&amp;</span>args.command {
         <span class="prelude-val">Some</span>(Commands::ClearDl) =&gt; {
             <span class="kw">if </span>Path::new(<span class="string">"./dl/"</span>).exists() {
-                remove_dir_all(<span class="string">"./dl/"</span>).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+                fs::remove_dir_all(<span class="string">"./dl/"</span>).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
                 <span class="kw">return </span><span class="macro">println!</span>(<span class="string">"Cleaned the ./dl/ folder and also deleted the folder fully!"</span>)
             } <span class="kw">else </span>{
                 <span class="kw">return </span><span class="macro">println!</span>(<span class="string">"Nothing to clean... Exiting!"</span>)
@@ -161,6 +184,22 @@
                 <span class="prelude-val">None </span>=&gt; {bytes_downloaded = <span class="number">0.0</span>}
             }
         }
+        <span class="prelude-val">Some</span>(Commands::DownloadPosts { text_file }) =&gt; {
+            <span class="kw">let </span>txt_file_path = Path::new(text_file);
+            <span class="kw">if </span>!txt_file_path.exists() {
+                <span class="macro">println!</span>(<span class="string">"The file specified wasn't found!"</span>);
+                <span class="kw">return
+            </span>}
+
+            <span class="kw">let </span>txt_file_contents = fs::read_to_string(txt_file_path).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+            <span class="kw">let </span>id_list: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = txt_file_contents.lines().collect();
+            
+            <span class="kw">let </span>finished_return = commands::download_posts_from_txt(id_list, <span class="kw-2">&amp;</span>args.lower_quality).<span class="kw">await</span>;
+            <span class="kw">match </span>finished_return {
+                <span class="prelude-val">Some</span>(x) =&gt; {bytes_downloaded = x}
+                <span class="prelude-val">None </span>=&gt; {bytes_downloaded = <span class="number">0.0</span>}
+            }
+        }
         <span class="prelude-val">None </span>=&gt; {
             <span class="kw">return
         </span>}
@@ -174,6 +213,13 @@
         }
     };
 
-    <span class="macro">println!</span>(<span class="string">"Whole Program took: {} seconds! Downloaded a total of: {:.2} MB.{}"</span>, fn_start.elapsed().as_secs(), (bytes_downloaded/<span class="number">1024.0</span>/<span class="number">1024.0</span>).to_string(), notice);
+    <span class="comment">// Dynamically output the converted file_size appropriate to its designation
+    </span><span class="kw">let </span>size_conversion: String = <span class="kw">if </span>bytes_downloaded/<span class="number">1024.0</span>/<span class="number">1024.0 </span>&lt; <span class="number">1.0 </span>{
+        <span class="macro">format!</span>(<span class="string">"{:.2} KB"</span>, bytes_downloaded/<span class="number">1024.0</span>)
+    } <span class="kw">else </span>{
+        <span class="macro">format!</span>(<span class="string">"{:.2} MB"</span>, bytes_downloaded/<span class="number">1024.0</span>/<span class="number">1024.0</span>)
+    };
+
+    <span class="macro">println!</span>(<span class="string">"Whole Program took: {} seconds! Downloaded a total of: {}{}"</span>, fn_start.elapsed().as_secs(), size_conversion, notice);
 }
 </code></pre></div></section></main></body></html>

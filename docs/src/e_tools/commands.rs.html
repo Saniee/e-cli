@@ -113,16 +113,62 @@
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! The module with all the command functions.
 
 </span><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>reqwest::Client;
 <span class="kw">use </span>reqwest::{header::HeaderMap, header::HeaderValue, header::USER_AGENT};
-<span class="kw">use </span>tokio::fs::create_dir_all;
 
 <span class="kw">use </span><span class="kw">crate</span>::type_defs::api_defs::Posts;
-<span class="kw">use </span><span class="kw">crate</span>::funcs::{<span class="self">self</span>, parse_artists};
+<span class="kw">use </span><span class="kw">crate</span>::funcs::{<span class="self">self</span>, create_dl_dir, parse_artists};
 
 <span class="doccomment">/// This function takes the arguments of [crate::cli::Commands::DownloadFavourites] and uses them to download the specified amount of media.
 </span><span class="kw">pub async fn </span>download_favourites(username: <span class="kw-2">&amp;</span>String, count: <span class="kw-2">&amp;</span>u8, random: <span class="kw-2">&amp;</span>bool, tags: <span class="kw-2">&amp;</span>String, lower_quality: <span class="kw-2">&amp;</span>bool) -&gt; <span class="prelude-ty">Option</span>&lt;f64&gt; {
@@ -150,9 +196,10 @@
 
     <span class="kw">let </span>data: Posts  = client.get(target).send().<span class="kw">await</span>.expect(<span class="string">"Err"</span>).json::&lt;Posts&gt;().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
 
-    <span class="macro">println!</span>(<span class="string">"Creating a ./dl/ directory if it doesn't exist...\n"</span>);
-    create_dir_all(<span class="string">"./dl/"</span>).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
-
+    <span class="kw">let </span>created_dir = create_dl_dir().<span class="kw">await</span>;
+    <span class="kw">if </span>created_dir {
+        <span class="macro">println!</span>(<span class="string">"Created a ./dl/ directory for all the downloaded files.\n"</span>)
+    }
 
     <span class="kw">let </span><span class="kw-2">mut </span>dl_size: f64 = <span class="number">0.0</span>;
     <span class="kw">for </span>post <span class="kw">in </span>data.posts {
@@ -186,10 +233,8 @@
     </span>}
 }
 
-<span class="doccomment">/// Thus function takes the arguments of [crate::cli::Commands::DownloadPost] and uses them to download a single post with the specified ID.
+<span class="doccomment">/// This function takes the arguments of [crate::cli::Commands::DownloadPost] and uses them to download a single post with the specified ID.
 </span><span class="kw">pub async fn </span>download_post(post_id: <span class="kw-2">&amp;</span>u64, lower_quality: <span class="kw-2">&amp;</span>bool) -&gt; <span class="prelude-ty">Option</span>&lt;f64&gt; {
-    <span class="macro">println!</span>(<span class="string">"Downloading Post: {}\n"</span>, post_id.to_string());
-
     <span class="kw">let </span>client = Client::builder();
     <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_static(<span class="string">"rust-powered-post-download/0.1"</span>));
@@ -199,15 +244,15 @@
 
     <span class="kw">let </span>data = client.get(target).send().<span class="kw">await</span>.expect(<span class="string">"Err"</span>).json::&lt;Posts&gt;().<span class="kw">await</span>.expect(<span class="string">"Couldn't get json."</span>);
 
-    <span class="macro">println!</span>(<span class="string">"Creating a ./dl/ directory if it doesn't exist...\n"</span>);
-    create_dir_all(<span class="string">"./dl/"</span>).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+    <span class="kw">let </span>created_dir = create_dl_dir().<span class="kw">await</span>;
+    <span class="kw">if </span>created_dir {
+        <span class="macro">println!</span>(<span class="string">"Created a ./dl/ directory for all the downloaded files.\n"</span>)
+    }
 
     <span class="kw">let </span>artist_name = parse_artists(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>].tags);
 
     <span class="kw">let </span>path_string = <span class="macro">format!</span>(<span class="string">"./dl/{}-{}.{}"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext);
     <span class="kw">let </span>path = Path::new(<span class="kw-2">&amp;</span>path_string);
-
-    <span class="macro">println!</span>(<span class="string">"{}"</span>, path.to_string_lossy());
 
     <span class="macro">println!</span>(<span class="string">"Starting download of {}-{}.{}"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext);
 
@@ -215,14 +260,63 @@
         <span class="kw">let </span>file_size: f64;
         <span class="kw">if </span><span class="kw-2">*</span>lower_quality {
             <span class="macro">println!</span>(<span class="string">"Trying to download lower quality file."</span>);
-            file_size = funcs::lower_quality_dl(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>], <span class="kw-2">&amp;</span>artist_name).<span class="kw">await
-        </span>} <span class="kw">else </span>{
+            file_size = funcs::lower_quality_dl(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>], <span class="kw-2">&amp;</span>artist_name).<span class="kw">await</span>;
+        } <span class="kw">else </span>{
             file_size = funcs::download(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>].file.url, <span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>].file.ext, data.posts[<span class="number">0</span>].id, <span class="kw-2">&amp;</span>artist_name).<span class="kw">await</span>;
         }
         <span class="macro">println!</span>(<span class="string">"Downloaded {}-{}.{}! File size: {:.2} KB\n"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext, file_size/<span class="number">1024.0</span>);
         <span class="prelude-val">Some</span>(file_size)
     } <span class="kw">else </span>{
         <span class="macro">println!</span>(<span class="string">"File {}-{}.{} already Exists!\n"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext);
+        <span class="prelude-val">None
+    </span>}
+}
+
+<span class="doccomment">/// This function accepts an already read file which is done in the main function. It takes a [Vec&lt;&amp;str&gt;] to iter over.
+</span><span class="kw">pub async fn </span>download_posts_from_txt(id_list: Vec&lt;<span class="kw-2">&amp;</span>str&gt;, lower_quality: <span class="kw-2">&amp;</span>bool) -&gt; <span class="prelude-ty">Option</span>&lt;f64&gt;{
+    <span class="macro">println!</span>(<span class="string">"Downloading from a .txt file. Number of Id's found: {}\n"</span>, id_list.len());
+
+    <span class="kw">let </span>client = Client::builder();
+    <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
+    headers.insert(USER_AGENT, HeaderValue::from_static(<span class="string">"rust-powered-post-download/0.1"</span>));
+    <span class="kw">let </span>client = client.default_headers(headers).build().unwrap();
+
+    <span class="kw">let </span>created_dir = create_dl_dir().<span class="kw">await</span>;
+    <span class="kw">if </span>created_dir {
+        <span class="macro">println!</span>(<span class="string">"Created a ./dl/ directory for all the downloaded files.\n"</span>)
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>dl_size: f64 = <span class="number">0.0</span>;
+    <span class="kw">for </span>id <span class="kw">in </span>id_list.iter() {
+        <span class="kw">let </span>target: String = <span class="macro">format!</span>(<span class="string">"https://e621.net/posts.json?tags=id:{}"</span>, <span class="kw-2">&amp;</span>id);
+
+        <span class="kw">let </span>data = client.get(target).send().<span class="kw">await</span>.expect(<span class="string">"Err"</span>).json::&lt;Posts&gt;().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+
+        <span class="kw">let </span>artist_name = parse_artists(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>].tags);
+
+        <span class="kw">let </span>path_string = <span class="macro">format!</span>(<span class="string">"./dl/{}-{}.{}"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext);
+        <span class="kw">let </span>path = Path::new(<span class="kw-2">&amp;</span>path_string);
+
+        <span class="macro">println!</span>(<span class="string">"Starting download of {}-{}.{}"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext);
+
+        <span class="kw">if </span>!path.exists() {
+            <span class="kw">let </span>file_size: f64;
+            <span class="kw">if </span><span class="kw-2">*</span>lower_quality {
+                <span class="macro">println!</span>(<span class="string">"Trying to download lower quality file."</span>);
+                file_size = funcs::lower_quality_dl(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>], <span class="kw-2">&amp;</span>artist_name).<span class="kw">await</span>;
+            } <span class="kw">else </span>{
+                file_size = funcs::download(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>].file.url, <span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>].file.ext, data.posts[<span class="number">0</span>].id, <span class="kw-2">&amp;</span>artist_name).<span class="kw">await</span>;
+            }
+            <span class="macro">println!</span>(<span class="string">"Downloaded {}-{}.{}! File size: {:.2} KB\n"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext, file_size/<span class="number">1024.0</span>);
+            dl_size += file_size;
+        } <span class="kw">else </span>{
+            <span class="macro">println!</span>(<span class="string">"File {}-{}.{} already Exists!\n"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext);
+        }
+    }
+
+    <span class="kw">if </span>dl_size &gt; <span class="number">0.0 </span>{
+        <span class="prelude-val">Some</span>(dl_size)
+    } <span class="kw">else </span>{
         <span class="prelude-val">None
     </span>}
 }</code></pre></div></section></main></body></html>

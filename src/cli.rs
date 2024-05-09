@@ -33,5 +33,9 @@ pub enum Commands {
     #[command[about = "Downloads a single post with the provided ID."]]
     DownloadPost {
         post_id: u64
+    },
+    #[command[about = "Downloads posts from a txt file provided."]]
+    DownloadPosts {
+        text_file: String
     }
 }

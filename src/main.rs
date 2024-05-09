@@ -6,10 +6,10 @@
 //! What it can do:
 //! - [x] Downloading Favourites of a user.
 //! - [x] Downloading a single post from the site.
+//! - [x] Downloading of multiple specific posts from a txt file
 //! 
 //! What it cannot do (so far):
 //! - [ ] Downloading multiple pages
-//! - [ ] Downloading of multiple specific posts from a txt file
 //! 
 //! ## Usage
 //! 
@@ -33,7 +33,7 @@ use std::path::Path;
 use clap::Parser;
 use cli::Commands;
 use commands::{download_favourites, download_post};
-use tokio::{fs::remove_dir_all, time::Instant};
+use tokio::{fs, time::Instant};
 
 pub mod funcs;
 pub mod commands;
@@ -51,7 +51,7 @@ async fn main() {
     match &args.command {
         Some(Commands::ClearDl) => {
             if Path::new("./dl/").exists() {
-                remove_dir_all("./dl/").await.expect("Err");
+                fs::remove_dir_all("./dl/").await.expect("Err");
                 return println!("Cleaned the ./dl/ folder and also deleted the folder fully!")
             } else {
                 return println!("Nothing to clean... Exiting!")
@@ -71,6 +71,22 @@ async fn main() {
                 None => {bytes_downloaded = 0.0}
             }
         }
+        Some(Commands::DownloadPosts { text_file }) => {
+            let txt_file_path = Path::new(text_file);
+            if !txt_file_path.exists() {
+                println!("The file specified wasn't found!");
+                return
+            }
+
+            let txt_file_contents = fs::read_to_string(txt_file_path).await.expect("Err");
+            let id_list: Vec<&str> = txt_file_contents.lines().collect();
+            
+            let finished_return = commands::download_posts_from_txt(id_list, &args.lower_quality).await;
+            match finished_return {
+                Some(x) => {bytes_downloaded = x}
+                None => {bytes_downloaded = 0.0}
+            }
+        }
         None => {
             return
         }
@@ -84,5 +100,12 @@ async fn main() {
         }
     };
 
-    println!("Whole Program took: {} seconds! Downloaded a total of: {:.2} MB.{}", fn_start.elapsed().as_secs(), (bytes_downloaded/1024.0/1024.0).to_string(), notice);
+    // Dynamically output the converted file_size appropriate to its designation
+    let size_conversion: String = if bytes_downloaded/1024.0/1024.0 < 1.0 {
+        format!("{:.2} KB", bytes_downloaded/1024.0)
+    } else {
+        format!("{:.2} MB", bytes_downloaded/1024.0/1024.0)
+    };
+
+    println!("Whole Program took: {} seconds! Downloaded a total of: {}{}", fn_start.elapsed().as_secs(), size_conversion, notice);
 }
