@@ -24,6 +24,7 @@
 //! ```
 //! 
 //! ## Downloading a single post with lower quality
+//! ### Note, this argument can be used with any of the commands the CLI has.
 //! ```
 //! e-tools.exe --lower-quality download-post {Post Id}
 //! ```
