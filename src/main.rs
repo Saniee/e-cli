@@ -1,4 +1,4 @@
-//! ## E-Tools
+//! # E-Tools
 //! The command line tool for downloading E-Posts from a certain site.
 //! 
 //! It aims to be fast, and have verbose downloading console print outs.
@@ -11,21 +11,35 @@
 //! What it cannot do (so far):
 //! - [ ] Downloading multiple pages
 //! 
-//! ## Usage
+//! # Usage
 //! 
-//! Downloading Favourites of a user with specific amount of posts.
+//! ## Downloading Favourites of a user with specific amount of posts.
 //! ```
 //! e-tools.exe download-favourites {Username} -c {Number of Posts}
 //! ```
 //! 
-//! Downloading Random Favourites of a user
+//! ## Downloading Random Favourites of a user
 //! ```
 //! e-tools.exe download-favourites {Username} -r
 //! ```
 //! 
-//! Downloading a single post with lower quality
+//! ## Downloading a single post with lower quality
 //! ```
 //! e-tools.exe --lower-quality download-post {Post Id}
+//! ```
+//! 
+//! ## Downloading multipe posts using a .txt file
+//! Text File needs to follow this pattern:
+//! ```
+//! id1
+//! id2
+//! id3
+//! ...
+//! ```
+//! 
+//! Then the command is as simple as it can be.
+//! ```
+//! e-tools.exe download-posts {Text File Path}
 //! ```
 
 use std::path::Path;
