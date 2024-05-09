@@ -1,2 +1,4 @@
 /target
+/docs-markdown
 gen-docs.bat
+docs_markdown/
