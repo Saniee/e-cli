@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["download","lower_quality_dl","parse_artists"]};

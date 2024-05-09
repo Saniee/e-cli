@@ -5,7 +5,7 @@ use tokio::fs::File;
 
 use crate::type_defs::api_defs::{LowerQuality, Post, Tags};
 
-/// This function downloads the file with [reqwest] and returns the size of it in bytes.
+/// This function downloads the file with reqwest and returns the size of it in bytes.
 pub async fn download(target_url: &String, file_ext: &String, post_id: u64, artist_name: &String) -> f64 {
     let bytes = reqwest::get(target_url).await.expect("Err").bytes().await.expect("Err");
 
