@@ -15,6 +15,7 @@ jobs:
     steps:
     - name: Create Build Dir
       run: mkdir build-dir
+    - uses: actions/checkout@v4
     - name: Build
       run: cargo build -r --target-dir ./build-dir
     - name: Publish Artifacts
@@ -27,6 +28,7 @@ jobs:
     steps:
     - name: Create Build Dir
       run: mkdir build-dir
+    - uses: actions/checkout@v4
     - name: Build
       run: cargo build -r --target-dir ./build-dir
     - name: Publish Artifacts
