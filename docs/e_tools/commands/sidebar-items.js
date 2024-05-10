@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["download_favourites","download_post","download_posts_from_txt"]};
+window.SIDEBAR_ITEMS = {"fn":["download_favourites","download_post","download_posts_from_file","fetch_posts"]};

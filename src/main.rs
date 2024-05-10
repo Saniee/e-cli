@@ -30,34 +30,29 @@ async fn main() {
             }
         }
         Some(Commands::DownloadFavourites {username, count, random, tags}) => {
-            let finished_return = download_favourites(username, count, random, tags, &args.lower_quality).await;
+            let finished_return = download_favourites(username, count, random, tags, &args.lower_quality, &args.api_source).await;
             match finished_return {
                 Some(x) => { bytes_downloaded = x }
                 None => { bytes_downloaded = 0.0}
             }
         }
         Some(Commands::DownloadPost {post_id }) => {
-            let finished_return = download_post(post_id, &args.lower_quality).await;
+            let finished_return = download_post(post_id, &args.lower_quality, &args.api_source).await;
             match finished_return {
                 Some(x) => { bytes_downloaded = x }
                 None => {bytes_downloaded = 0.0}
             }
         }
-        Some(Commands::DownloadPosts { text_file }) => {
-            let txt_file_path = Path::new(text_file);
-            if !txt_file_path.exists() {
-                println!("The file specified wasn't found!");
-                return
-            }
-
-            let txt_file_contents = fs::read_to_string(txt_file_path).await.expect("Err");
-            let id_list: Vec<&str> = txt_file_contents.lines().collect();
-            
-            let finished_return = commands::download_posts_from_txt(id_list, &args.lower_quality).await;
+        Some(Commands::DownloadPosts { file_path }) => {
+            let finished_return = commands::download_posts_from_file(file_path, &args.lower_quality).await;
             match finished_return {
                 Some(x) => {bytes_downloaded = x}
                 None => {bytes_downloaded = 0.0}
             }
+        }
+        Some(Commands::GetPages { tags, count }) => {
+            commands::fetch_posts(tags, count, &args.api_source).await;
+            return
         }
         None => {
             return

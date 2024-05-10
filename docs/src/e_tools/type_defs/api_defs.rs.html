@@ -47,7 +47,6 @@
 <a href="#45" id="45">45</a>
 <a href="#46" id="46">46</a>
 <a href="#47" id="47">47</a>
-<a href="#48" id="48">48</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Api definitions for the E api.
 
 </span><span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -68,8 +67,7 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>File {
     <span class="kw">pub </span>ext: String,
-    <span class="kw">pub </span>url: String,
-    <span class="kw">pub </span>size: u128
+    <span class="kw">pub </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
@@ -80,7 +78,7 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Sample {
     <span class="kw">pub </span>has: bool,
-    <span class="kw">pub </span>url: String,
+    <span class="kw">pub </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>alternates: Alternates
 }
 

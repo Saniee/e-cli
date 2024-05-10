@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["create_dl_dir","download","lower_quality_dl","parse_artists"]};
+window.SIDEBAR_ITEMS = {"fn":["create_dl_dir","debug_response_file","download","lower_quality_dl","parse_artists"]};

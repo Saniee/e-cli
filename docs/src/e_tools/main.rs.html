@@ -78,11 +78,6 @@
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
 </pre></div><pre class="rust"><code><span class="attr">#![doc = <span class="macro">include_str!</span>(<span class="string">"../docs_markdown/main.md"</span>)]
 
 </span><span class="kw">use </span>std::path::Path;
@@ -115,35 +110,30 @@
             }
         }
         <span class="prelude-val">Some</span>(Commands::DownloadFavourites {username, count, random, tags}) =&gt; {
-            <span class="kw">let </span>finished_return = download_favourites(username, count, random, tags, <span class="kw-2">&amp;</span>args.lower_quality).<span class="kw">await</span>;
+            <span class="kw">let </span>finished_return = download_favourites(username, count, random, tags, <span class="kw-2">&amp;</span>args.lower_quality, <span class="kw-2">&amp;</span>args.api_source).<span class="kw">await</span>;
             <span class="kw">match </span>finished_return {
                 <span class="prelude-val">Some</span>(x) =&gt; { bytes_downloaded = x }
                 <span class="prelude-val">None </span>=&gt; { bytes_downloaded = <span class="number">0.0</span>}
             }
         }
         <span class="prelude-val">Some</span>(Commands::DownloadPost {post_id }) =&gt; {
-            <span class="kw">let </span>finished_return = download_post(post_id, <span class="kw-2">&amp;</span>args.lower_quality).<span class="kw">await</span>;
+            <span class="kw">let </span>finished_return = download_post(post_id, <span class="kw-2">&amp;</span>args.lower_quality, <span class="kw-2">&amp;</span>args.api_source).<span class="kw">await</span>;
             <span class="kw">match </span>finished_return {
                 <span class="prelude-val">Some</span>(x) =&gt; { bytes_downloaded = x }
                 <span class="prelude-val">None </span>=&gt; {bytes_downloaded = <span class="number">0.0</span>}
             }
         }
-        <span class="prelude-val">Some</span>(Commands::DownloadPosts { text_file }) =&gt; {
-            <span class="kw">let </span>txt_file_path = Path::new(text_file);
-            <span class="kw">if </span>!txt_file_path.exists() {
-                <span class="macro">println!</span>(<span class="string">"The file specified wasn't found!"</span>);
-                <span class="kw">return
-            </span>}
-
-            <span class="kw">let </span>txt_file_contents = fs::read_to_string(txt_file_path).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
-            <span class="kw">let </span>id_list: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = txt_file_contents.lines().collect();
-            
-            <span class="kw">let </span>finished_return = commands::download_posts_from_txt(id_list, <span class="kw-2">&amp;</span>args.lower_quality).<span class="kw">await</span>;
+        <span class="prelude-val">Some</span>(Commands::DownloadPosts { file_path }) =&gt; {
+            <span class="kw">let </span>finished_return = commands::download_posts_from_file(file_path, <span class="kw-2">&amp;</span>args.lower_quality).<span class="kw">await</span>;
             <span class="kw">match </span>finished_return {
                 <span class="prelude-val">Some</span>(x) =&gt; {bytes_downloaded = x}
                 <span class="prelude-val">None </span>=&gt; {bytes_downloaded = <span class="number">0.0</span>}
             }
         }
+        <span class="prelude-val">Some</span>(Commands::GetPages { tags, count }) =&gt; {
+            commands::fetch_posts(tags, count, <span class="kw-2">&amp;</span>args.api_source).<span class="kw">await</span>;
+            <span class="kw">return
+        </span>}
         <span class="prelude-val">None </span>=&gt; {
             <span class="kw">return
         </span>}

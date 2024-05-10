@@ -18,8 +18,7 @@ pub struct Post {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct File {
     pub ext: String,
-    pub url: String,
-    pub size: u128
+    pub url: Option<String>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,7 +29,7 @@ pub struct Tags {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Sample {
     pub has: bool,
-    pub url: String,
+    pub url: Option<String>,
     pub alternates: Alternates
 }
 
