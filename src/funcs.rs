@@ -96,7 +96,7 @@ pub fn parse_artists(tags: &Tags) -> String {
     }
 }
 
-/// Single function to parse the array of artists and make a neat single string for file naming.
+/// Single function to create the ./dl/ dir for all media downloaded by this tool.
 pub async fn create_dl_dir() -> bool {
     let dir_path = Path::new("./dl/");
     if !dir_path.exists() {
