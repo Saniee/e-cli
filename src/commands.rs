@@ -202,7 +202,7 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
 
 /// This function takes tags and the page count and fetches posts. Then it saves them into a file named posts.json in the root dir.
 pub async fn fetch_posts(tags: &String, count: &u8, api_source: &String) {
-    println!("Getting {} pages and putting the id's into a txt file.", count);
+    println!("Getting {} pages and putting the id's into a json file.", count);
     
     let client = Client::builder();
     let mut headers = HeaderMap::new();
