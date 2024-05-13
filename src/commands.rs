@@ -26,13 +26,13 @@ pub async fn download_favourites(username: &String, count: &u8, random: &bool, t
         ""
     };
 
-    let tags: &str = if tags != "" {
-        &tags
+    let tags: &str = if !tags.is_empty() {
+        tags
     } else {
         ""
     };
 
-    let target: String = format!("https://{}/posts.json?tags=fav:{} {} {}&limit={}", api_source, username, tags, random_check , count.to_string());
+    let target: String = format!("https://{}/posts.json?tags=fav:{} {} {}&limit={}", api_source, username, tags, random_check , count);
 
     let data: Posts  = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Err");
 
@@ -88,7 +88,7 @@ pub async fn download_post(post_id: &u64, lower_quality: &bool, api_source: &Str
     headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
     let client = client.default_headers(headers).build().unwrap();
 
-    let target: String = format!("https://{}/posts.json?tags=id:{}", api_source, post_id.to_string());
+    let target: String = format!("https://{}/posts.json?tags=id:{}", api_source, post_id);
 
     let data = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Couldn't get json.");
 

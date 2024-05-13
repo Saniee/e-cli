@@ -1,5 +1,6 @@
 //! Special functions for the cli that would otherwise be reused multiple times.
 
+use std::cmp::Ordering;
 use std::path::Path;
 
 use tokio::{fs::create_dir_all, io::AsyncWriteExt};
@@ -83,9 +84,25 @@ pub async fn lower_quality_dl(post: &Post, artist_name: &String) -> f64 {
 /// 
 /// `name, name`
 pub fn parse_artists(tags: &Tags) -> String {
-    if tags.artist.len() > 1 {
+    match tags.artist.len().cmp(&1) {
+        Ordering::Greater => {
+            let mut artists: String = String::new();
+            for artist in tags.artist.iter() {
+                artists = artists + artist + ", "
+            }
+            artists[..artists.len()-2].to_string()
+        }
+        Ordering::Equal => {
+            tags.artist[0].to_string()
+        }
+        Ordering::Less => {
+            "unknown-artist".to_string()
+        }
+    }
+
+    /* if tags.artist.len() > 1 {
         let mut artists: String = String::new();
-        for (_i, artist) in tags.artist.iter().enumerate() {
+        for artist in tags.artist.iter() {
             artists = artists + artist + ", "
         }
         artists[..artists.len()-2].to_string()
@@ -93,7 +110,7 @@ pub fn parse_artists(tags: &Tags) -> String {
         tags.artist[0].to_string()
     } else {
         "unknown-artist".to_string()
-    }
+    } */
 }
 
 /// Single function to create the ./dl/ dir for all media downloaded by this tool.
