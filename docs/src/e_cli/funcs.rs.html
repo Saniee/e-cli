@@ -123,9 +123,27 @@
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Special functions for the cli that would otherwise be reused multiple times.
 
-</span><span class="kw">use </span>std::path::Path;
+</span><span class="kw">use </span>std::cmp::Ordering;
+<span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>tokio::{fs::create_dir_all, io::AsyncWriteExt};
 <span class="kw">use </span>tokio::fs::File;
@@ -208,18 +226,34 @@
 /// 
 /// `name, name`
 </span><span class="kw">pub fn </span>parse_artists(tags: <span class="kw-2">&amp;</span>Tags) -&gt; String {
-    <span class="kw">if </span>tags.artist.len() &gt; <span class="number">1 </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>artists: String = String::new();
-        <span class="kw">for </span>(_i, artist) <span class="kw">in </span>tags.artist.iter().enumerate() {
-            artists = artists + artist + <span class="string">", "
-        </span>}
-        artists[..artists.len()-<span class="number">2</span>].to_string()
-    } <span class="kw">else if </span>tags.artist.len() == <span class="number">1 </span>{
-        tags.artist[<span class="number">0</span>].to_string()
-    } <span class="kw">else </span>{
-        <span class="string">"unknown-artist"</span>.to_string()
+    <span class="kw">match </span>tags.artist.len().cmp(<span class="kw-2">&amp;</span><span class="number">1</span>) {
+        Ordering::Greater =&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>artists: String = String::new();
+            <span class="kw">for </span>artist <span class="kw">in </span>tags.artist.iter() {
+                artists = artists + artist + <span class="string">", "
+            </span>}
+            artists[..artists.len()-<span class="number">2</span>].to_string()
+        }
+        Ordering::Equal =&gt; {
+            tags.artist[<span class="number">0</span>].to_string()
+        }
+        Ordering::Less =&gt; {
+            <span class="string">"unknown-artist"</span>.to_string()
+        }
     }
-}
+
+    <span class="comment">/* if tags.artist.len() &gt; 1 {
+        let mut artists: String = String::new();
+        for artist in tags.artist.iter() {
+            artists = artists + artist + ", "
+        }
+        artists[..artists.len()-2].to_string()
+    } else if tags.artist.len() == 1 {
+        tags.artist[0].to_string()
+    } else {
+        "unknown-artist".to_string()
+    } */
+</span>}
 
 <span class="doccomment">/// Single function to create the ./dl/ dir for all media downloaded by this tool.
 </span><span class="kw">pub async fn </span>create_dl_dir() -&gt; bool {

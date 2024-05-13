@@ -12,6 +12,7 @@ pub mod commands;
 pub mod cli;
 pub mod type_defs;
 
+/// Main function, handles the cli arguments.
 #[tokio::main]
 async fn main() {
     let args = cli::Args::parse();
