@@ -1,4 +1,5 @@
 # E-Cli
+[![Rust Binary Build](https://github.com/Saniee/e-cli/actions/workflows/rust.yml/badge.svg)](https://github.com/Saniee/e-cli/actions/workflows/rust.yml) <br>
 The command line tool for downloading E-Posts from a certain site.
 
 It aims to be fast, and have verbose downloading console print outs.
