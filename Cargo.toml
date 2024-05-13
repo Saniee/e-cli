@@ -1,5 +1,5 @@
 [package]
-name = "e-tools"
+name = "e-cli"
 version = "0.1.1"
 edition = "2021"
 
