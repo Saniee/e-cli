@@ -1,4 +1,4 @@
-# E-Tools
+# E-Cli
 The command line tool for downloading E-Posts from a certain site.
 
 It aims to be fast, and have verbose downloading console print outs.

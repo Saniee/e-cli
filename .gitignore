@@ -2,4 +2,4 @@
 Cargo.lock
 debug.json
 posts.json
-gen-docs.bat
+gen-docs.*
