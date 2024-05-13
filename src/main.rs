@@ -4,7 +4,7 @@ use std::path::Path;
 
 use clap::Parser;
 use cli::Commands;
-use commands::{download_favourites, download_post};
+use commands::{download_favourites, download_post, download_posts_from_file, fetch_posts};
 use tokio::{fs, time::Instant};
 
 pub mod funcs;
@@ -44,14 +44,14 @@ async fn main() {
             }
         }
         Some(Commands::DownloadPosts { file_path }) => {
-            let finished_return = commands::download_posts_from_file(file_path, &args.lower_quality).await;
+            let finished_return = download_posts_from_file(file_path, &args.lower_quality).await;
             match finished_return {
                 Some(x) => {bytes_downloaded = x}
                 None => {bytes_downloaded = 0.0}
             }
         }
         Some(Commands::GetPages { tags, count }) => {
-            commands::fetch_posts(tags, count, &args.api_source).await;
+            fetch_posts(tags, count, &args.api_source).await;
             return
         }
         None => {
