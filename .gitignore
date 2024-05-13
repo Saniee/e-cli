@@ -1,4 +1,6 @@
 /target
+/dl
+*.txt
 Cargo.lock
 debug.json
 posts.json

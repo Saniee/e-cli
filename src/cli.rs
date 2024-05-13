@@ -41,6 +41,10 @@ pub enum Commands {
     DownloadPosts {
         file_path: String
     },
+    #[command[about = "Downloads posts from a txt file."]]
+    DownloadPostsFromTxt {
+        file_path: String
+    },
     #[command[about = "Fetches multiple pages and saves them into a txt file for later use."]]
     GetPages {
         #[arg(help = "Refer here: https://e926.net/help/cheatsheet for help with tags.")]

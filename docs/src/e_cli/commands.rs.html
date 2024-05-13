@@ -248,6 +248,80 @@
 <a href="#246" id="246">246</a>
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! The module with all the command functions.
 
 </span><span class="kw">use </span>std::path::Path;
@@ -255,7 +329,7 @@
 <span class="kw">use </span>reqwest::Client;
 <span class="kw">use </span>reqwest::{header::HeaderMap, header::HeaderValue, header::USER_AGENT};
 <span class="kw">use </span>tokio::fs::File;
-<span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
+<span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 
 <span class="kw">use </span><span class="kw">crate</span>::type_defs::api_defs::{Post, Posts};
 <span class="kw">use </span><span class="kw">crate</span>::funcs::{<span class="self">self</span>, create_dl_dir, debug_response_file, parse_artists};
@@ -452,7 +526,7 @@
 
 <span class="doccomment">/// This function takes tags and the page count and fetches posts. Then it saves them into a file named posts.json in the root dir.
 </span><span class="kw">pub async fn </span>fetch_posts(tags: <span class="kw-2">&amp;</span>String, count: <span class="kw-2">&amp;</span>u8, api_source: <span class="kw-2">&amp;</span>String) {
-    <span class="macro">println!</span>(<span class="string">"Getting {} pages and putting the id's into a txt file."</span>, count);
+    <span class="macro">println!</span>(<span class="string">"Getting {} pages and putting the id's into a json file."</span>, count);
     
     <span class="kw">let </span>client = Client::builder();
     <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
@@ -495,4 +569,78 @@
     <span class="kw">let </span>json = serde_json::to_string(<span class="kw-2">&amp;</span>posts).unwrap();
     json_file.write_all(json.as_bytes()).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
     json_file.flush().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+}
+
+<span class="doccomment">/// Reads a txt file, parses it into a list and then iters over it to download each post.
+</span><span class="kw">pub async fn </span>download_posts_from_txt(file_path: <span class="kw-2">&amp;</span>String, api_source: <span class="kw-2">&amp;</span>String, lower_quality: <span class="kw-2">&amp;</span>bool) -&gt; <span class="prelude-ty">Option</span>&lt;f64&gt; {
+    <span class="kw">let </span>txt_file_path = Path::new(file_path);
+    <span class="kw">let </span>txt_file_result = File::open(txt_file_path).<span class="kw">await</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>dl_size: f64 = <span class="number">0.0</span>;
+
+    <span class="kw">let </span>txt_file = <span class="kw">match </span>txt_file_result {
+        <span class="prelude-val">Ok</span>(file) =&gt; {file}
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"Err {}"</span>, err);
+            <span class="macro">panic!</span>(<span class="string">"{}"</span>, err)
+        }
+    };
+
+    <span class="kw">let </span>created_dir = create_dl_dir().<span class="kw">await</span>;
+    <span class="kw">if </span>created_dir {
+        <span class="macro">println!</span>(<span class="string">"Created a ./dl/ directory for all the downloaded files.\n"</span>)
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>reader = BufReader::new(txt_file);
+    <span class="kw">let </span><span class="kw-2">mut </span>txt_file_contents = String::new();
+    <span class="kw">let _ </span>= reader.read_to_string(<span class="kw-2">&amp;mut </span>txt_file_contents).<span class="kw">await</span>;
+    <span class="kw">let </span>id_list = txt_file_contents.trim().split(<span class="string">"\n"</span>);
+
+    <span class="kw">let </span>client = Client::builder();
+    <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
+    headers.insert(USER_AGENT, HeaderValue::from_static(<span class="string">"rust-powered-post-download/0.1"</span>));
+    <span class="kw">let </span>client = client.default_headers(headers).build().unwrap();
+
+    <span class="kw">for </span>id <span class="kw">in </span>id_list.into_iter() {
+        <span class="kw">let </span>target = <span class="macro">format!</span>(<span class="string">"https://{}/posts.json?tags=id:{}"</span>, api_source, id);
+
+        <span class="kw">let </span>posts = client.get(<span class="kw-2">&amp;</span>target).send().<span class="kw">await</span>.expect(<span class="string">"Err"</span>).json::&lt;Posts&gt;().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+        <span class="kw">let </span>post = <span class="kw-2">&amp;</span>posts.posts[<span class="number">0</span>];
+
+        <span class="kw">let </span>artist_name = parse_artists(<span class="kw-2">&amp;</span>post.tags);
+
+        <span class="kw">let </span>path_string = <span class="macro">format!</span>(<span class="string">"./dl/{}-{}.{}"</span>, artist_name, post.id, post.file.ext);
+        <span class="kw">let </span>path = Path::new(<span class="kw-2">&amp;</span>path_string);
+
+        <span class="macro">println!</span>(<span class="string">"Starting download of {}-{}.{}"</span>, artist_name, post.id, post.file.ext);
+
+        <span class="kw">if </span>!path.exists() {
+            <span class="kw">let </span>file_size: f64;
+            <span class="kw">if </span><span class="kw-2">*</span>lower_quality {
+                file_size = funcs::lower_quality_dl(<span class="kw-2">&amp;</span>post, <span class="kw-2">&amp;</span>artist_name).<span class="kw">await
+            </span>} <span class="kw">else </span>{
+                <span class="kw">match </span><span class="kw-2">&amp;</span>post.file.url {
+                    <span class="prelude-val">Some</span>(url) =&gt; {
+                        file_size = funcs::download(url, <span class="kw-2">&amp;</span>post.file.ext, post.id, <span class="kw-2">&amp;</span>artist_name).<span class="kw">await
+                    </span>}
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">println!</span>(<span class="string">"Cannot download post {}-{} due to it missing a file url"</span>, artist_name, post.id);
+                        file_size = <span class="number">0.0</span>;
+                    }
+                }
+            }
+
+            <span class="macro">println!</span>(<span class="string">"Downloaded {}-{}.{}! File size: {:.2} MB\n"</span>, artist_name, post.id, post.file.ext, file_size/<span class="number">1024.0</span>/<span class="number">1024.0</span>);
+
+            dl_size += file_size
+        } <span class="kw">else </span>{
+            <span class="macro">println!</span>(<span class="string">"File {}-{}.{} already Exists!\n"</span>, artist_name, post.id, post.file.ext)
+        }
+    }
+
+    <span class="kw">if </span>dl_size &gt; <span class="number">0.0 </span>{
+        <span class="prelude-val">Some</span>(dl_size)
+    } <span class="kw">else </span>{
+        <span class="prelude-val">None
+    </span>}
 }</code></pre></div></section></main></body></html>

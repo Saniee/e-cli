@@ -79,13 +79,17 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
 </pre></div><pre class="rust"><code><span class="attr">#![doc = <span class="macro">include_str!</span>(<span class="string">"../docs_markdown/main.md"</span>)]
 
 </span><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cli::Commands;
-<span class="kw">use </span>commands::{download_favourites, download_post, download_posts_from_file, fetch_posts};
+<span class="kw">use </span>commands::{download_favourites, download_post, download_posts_from_file, download_posts_from_txt, fetch_posts};
 <span class="kw">use </span>tokio::{fs, time::Instant};
 
 <span class="kw">pub mod </span>funcs;
@@ -132,6 +136,10 @@
                 <span class="prelude-val">None </span>=&gt; {bytes_downloaded = <span class="number">0.0</span>}
             }
         }
+        <span class="prelude-val">Some</span>(Commands::DownloadPostsFromTxt { file_path }) =&gt; {
+            download_posts_from_txt(file_path, <span class="kw-2">&amp;</span>args.api_source, <span class="kw-2">&amp;</span>args.lower_quality).<span class="kw">await</span>;
+            <span class="kw">return
+        </span>}
         <span class="prelude-val">Some</span>(Commands::GetPages { tags, count }) =&gt; {
             fetch_posts(tags, count, <span class="kw-2">&amp;</span>args.api_source).<span class="kw">await</span>;
             <span class="kw">return

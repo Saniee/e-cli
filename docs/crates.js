@@ -1,1 +1,1 @@
-window.ALL_CRATES = ["e_cli","e_tools"];
+window.ALL_CRATES = ["e_cli"];
