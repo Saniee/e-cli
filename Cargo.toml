@@ -1,7 +1,11 @@
 [package]
 name = "e-cli"
-version = "0.1.1"
+version = "0.1.2"
+authors = ["Saniee"]
+repository = "https://github.com/Saniee/e-cli"
+documentation = "https://saniee.github.io/e-cli/"
 edition = "2021"
+
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
