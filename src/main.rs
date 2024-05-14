@@ -64,14 +64,6 @@ async fn main() {
         }
     }
 
-    let notice: String = {
-        if args.lower_quality {
-            "\nMay be incorrect with the --lower-quality tag.".to_string()
-        } else {
-            "".to_string()
-        }
-    };
-
     // Dynamically output the converted file_size appropriate to its designation
     let size_conversion: String = if bytes_downloaded/1024.0/1024.0 < 1.0 {
         format!("{:.2} KB", bytes_downloaded/1024.0)
@@ -79,5 +71,5 @@ async fn main() {
         format!("{:.2} MB", bytes_downloaded/1024.0/1024.0)
     };
 
-    println!("Whole Program took: {} seconds! Downloaded a total of: {}{}", fn_start.elapsed().as_secs(), size_conversion, notice);
+    println!("Whole Program took: {} seconds! Downloaded a total of: {}", fn_start.elapsed().as_secs(), size_conversion);
 }

@@ -36,6 +36,11 @@ pub async fn download_favourites(username: &String, count: &u8, random: &bool, t
 
     let data: Posts  = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Err");
 
+    if data.posts.len() == 0 {
+        println!("No post found...");
+        return None
+    }
+
     let created_dir = create_dl_dir().await;
     if created_dir {
         println!("Created a ./dl/ directory for all the downloaded files.\n")
@@ -97,6 +102,11 @@ pub async fn download_post(post_id: &u64, lower_quality: &bool, api_source: &Str
         println!("Created a ./dl/ directory for all the downloaded files.\n")
     }
 
+    if data.posts.len() == 0 {
+        println!("No post found...");
+        return None
+    }
+
     let artist_name = parse_artists(&data.posts[0].tags);
 
     let path_string = format!("./dl/{}-{}.{}", artist_name, data.posts[0].id, data.posts[0].file.ext);
@@ -154,7 +164,7 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
     let posts = match parse_result {
         Ok(posts) => {posts}
         Err(err) => {
-            println!("An error occured when the pgoram tried to parse the data from the file. Err {}", err);
+            println!("An error occured when the program tried to parse the data from the file. Err {}", err);
             return None
         }
     };
