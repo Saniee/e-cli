@@ -126,33 +126,6 @@
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Special functions for the cli that would otherwise be reused multiple times.
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -162,7 +135,7 @@
 <span class="kw">use </span>tokio::{fs::create_dir_all, io::AsyncWriteExt};
 <span class="kw">use </span>tokio::fs::File;
 
-<span class="kw">use </span><span class="kw">crate</span>::type_defs::api_defs::{LowerQuality, Post, Tags};
+<span class="kw">use </span><span class="kw">crate</span>::type_defs::api_defs::{Post, Tags};
 
 <span class="doccomment">/// This function downloads the file with reqwest and returns the size of it in bytes.
 </span><span class="kw">pub async fn </span>download(target_url: <span class="kw-2">&amp;</span>String, file_ext: <span class="kw-2">&amp;</span>String, post_id: u64, artist_name: <span class="kw-2">&amp;</span>String) -&gt; f64 {
@@ -190,48 +163,33 @@
 <span class="doccomment">/// This function uses the [fn@download] function to download parsed lower quality versions of the posts.
 </span><span class="kw">pub async fn </span>lower_quality_dl(post: <span class="kw-2">&amp;</span>Post, artist_name: <span class="kw-2">&amp;</span>String) -&gt; f64 {
     <span class="macro">println!</span>(<span class="string">"Trying to download lower quality media..."</span>);
-    <span class="kw">if </span>post.sample.has {
-        <span class="kw">match </span><span class="kw-2">&amp;</span>post.sample.alternates.lower_quality {
-            <span class="prelude-val">Some</span>(LowerQuality { media_type, urls }) =&gt; {
-                <span class="kw">if </span>media_type == <span class="string">"video" </span>{
-                    download(<span class="kw-2">&amp;</span>urls[<span class="number">0</span>], <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
+    <span class="comment">// Does the post have a sample? If yes, handle it accordingly.
+    </span><span class="kw">if </span>post.sample.has {
+        <span class="comment">// if there is some lower quality download url, try getting it.
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(lower_quality) = <span class="kw-2">&amp;</span>post.sample.alternates.lower_quality {
+            <span class="comment">// Lower quality videos have multiple urls. Get the first one if the media type is a video
+            </span><span class="kw">if </span>lower_quality.media_type == <span class="string">"video" </span>{
+                download(<span class="kw-2">&amp;</span>lower_quality.urls[<span class="number">0</span>], <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
+            </span><span class="comment">// Get the sample url instead when its an image etc. Since they have only one url.
+            </span>} <span class="kw">else </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(sample_url) = <span class="kw-2">&amp;</span>post.sample.url {
+                    download(sample_url, <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
+                </span><span class="comment">// If all fails, print verbose and return 0 as the bytes downloaded
                 </span>} <span class="kw">else </span>{
-                    <span class="kw">match </span><span class="kw-2">&amp;</span>post.sample.url {
-                        <span class="prelude-val">Some</span>(url) =&gt; {
-                            download(url, <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
-                        </span>}
-                        <span class="prelude-val">None </span>=&gt; {
-                            <span class="kw">match </span><span class="kw-2">&amp;</span>post.file.url {
-                                <span class="prelude-val">Some</span>(url) =&gt; {
-                                    download(url, <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
-                                </span>}
-                                <span class="prelude-val">None </span>=&gt; {
-                                    <span class="macro">println!</span>(<span class="string">"Cannot download post {}-{} due it not having any file url."</span>, artist_name, <span class="kw-2">&amp;</span>post.id);
-                                    <span class="number">0.0
-                                </span>}
-                            }
-                        }
-                    }
-                }
+                    <span class="macro">println!</span>(<span class="string">"Cannot download post {}-{} due it not having any file url."</span>, artist_name, <span class="kw-2">&amp;</span>post.id);
+                    <span class="number">0.0
+                </span>}
             }
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">match </span><span class="kw-2">&amp;</span>post.sample.url {
-                    <span class="prelude-val">Some</span>(url) =&gt; {
-                        download(url, <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
-                    </span>}
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="kw">match </span><span class="kw-2">&amp;</span>post.file.url {
-                            <span class="prelude-val">Some</span>(url) =&gt; {
-                                download(url, <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
-                            </span>}
-                            <span class="prelude-val">None </span>=&gt; {
-                                <span class="macro">println!</span>(<span class="string">"Cannot download post {}-{} due it not having any file url."</span>, artist_name, <span class="kw-2">&amp;</span>post.id);
-                                <span class="number">0.0
-                            </span>}
-                        }
-                    }
-                }
-            }
+        <span class="comment">// Get the sample url if there was no lower_quality found
+        </span>} <span class="kw">else </span>{
+            <span class="comment">// Try to download the sample file
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(sample_url) = <span class="kw-2">&amp;</span>post.sample.url {
+                download(sample_url, <span class="kw-2">&amp;</span>post.file.ext, post.id, artist_name).<span class="kw">await
+            </span><span class="comment">// If all fails, print verbose and return 0 as the bytes downloaded
+            </span>} <span class="kw">else </span>{
+                <span class="macro">println!</span>(<span class="string">"Cannot download post {}-{} due it not having any file url."</span>, artist_name, <span class="kw-2">&amp;</span>post.id);
+                <span class="number">0.0
+            </span>}
         }
     } <span class="kw">else </span>{
         <span class="kw">match </span><span class="kw-2">&amp;</span>post.file.url {
@@ -267,19 +225,7 @@
             <span class="string">"unknown-artist"</span>.to_string()
         }
     }
-
-    <span class="comment">/* if tags.artist.len() &gt; 1 {
-        let mut artists: String = String::new();
-        for artist in tags.artist.iter() {
-            artists = artists + artist + ", "
-        }
-        artists[..artists.len()-2].to_string()
-    } else if tags.artist.len() == 1 {
-        tags.artist[0].to_string()
-    } else {
-        "unknown-artist".to_string()
-    } */
-</span>}
+}
 
 <span class="doccomment">/// Single function to create the ./dl/ dir for all media downloaded by this tool.
 </span><span class="kw">pub async fn </span>create_dl_dir() -&gt; bool {
