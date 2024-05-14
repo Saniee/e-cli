@@ -7,7 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use tokio::{fs::create_dir_all, io::AsyncWriteExt};
 use tokio::fs::File;
 
-use crate::type_defs::api_defs::{LowerQuality, Post, Tags};
+use crate::type_defs::api_defs::{Post, Tags};
 
 /// This function downloads the file with reqwest and returns the size of it in bytes.
 pub async fn download(target_url: &String, file_ext: &String, post_id: u64, artist_name: &String) -> f64 {
@@ -35,47 +35,32 @@ pub async fn download(target_url: &String, file_ext: &String, post_id: u64, arti
 /// This function uses the [fn@download] function to download parsed lower quality versions of the posts.
 pub async fn lower_quality_dl(post: &Post, artist_name: &String) -> f64 {
     println!("Trying to download lower quality media...");
+    // Does the post have a sample? If yes, handle it accordingly.
     if post.sample.has {
-        match &post.sample.alternates.lower_quality {
-            Some(LowerQuality { media_type, urls }) => {
-                if media_type == "video" {
-                    download(&urls[0], &post.file.ext, post.id, artist_name).await
+        // if there is some lower quality download url, try getting it.
+        if let Some(lower_quality) = &post.sample.alternates.lower_quality {
+            // Lower quality videos have multiple urls. Get the first one if the media type is a video
+            if lower_quality.media_type == "video" {
+                download(&lower_quality.urls[0], &post.file.ext, post.id, artist_name).await
+            // Get the sample url instead when its an image etc. Since they have only one url.
+            } else {
+                if let Some(sample_url) = &post.sample.url {
+                    download(sample_url, &post.file.ext, post.id, artist_name).await
+                // If all fails, print verbose and return 0 as the bytes downloaded
                 } else {
-                    match &post.sample.url {
-                        Some(url) => {
-                            download(url, &post.file.ext, post.id, artist_name).await
-                        }
-                        None => {
-                            match &post.file.url {
-                                Some(url) => {
-                                    download(url, &post.file.ext, post.id, artist_name).await
-                                }
-                                None => {
-                                    println!("Cannot download post {}-{} due it not having any file url.", artist_name, &post.id);
-                                    0.0
-                                }
-                            }
-                        }
-                    }
+                    println!("Cannot download post {}-{} due it not having any file url.", artist_name, &post.id);
+                    0.0
                 }
             }
-            None => {
-                match &post.sample.url {
-                    Some(url) => {
-                        download(url, &post.file.ext, post.id, artist_name).await
-                    }
-                    None => {
-                        match &post.file.url {
-                            Some(url) => {
-                                download(url, &post.file.ext, post.id, artist_name).await
-                            }
-                            None => {
-                                println!("Cannot download post {}-{} due it not having any file url.", artist_name, &post.id);
-                                0.0
-                            }
-                        }
-                    }
-                }
+        // Get the sample url if there was no lower_quality found
+        } else {
+            // Try to download the sample file
+            if let Some(sample_url) = &post.sample.url {
+                download(sample_url, &post.file.ext, post.id, artist_name).await
+            // If all fails, print verbose and return 0 as the bytes downloaded
+            } else {
+                println!("Cannot download post {}-{} due it not having any file url.", artist_name, &post.id);
+                0.0
             }
         }
     } else {
@@ -112,18 +97,6 @@ pub fn parse_artists(tags: &Tags) -> String {
             "unknown-artist".to_string()
         }
     }
-
-    /* if tags.artist.len() > 1 {
-        let mut artists: String = String::new();
-        for artist in tags.artist.iter() {
-            artists = artists + artist + ", "
-        }
-        artists[..artists.len()-2].to_string()
-    } else if tags.artist.len() == 1 {
-        tags.artist[0].to_string()
-    } else {
-        "unknown-artist".to_string()
-    } */
 }
 
 /// Single function to create the ./dl/ dir for all media downloaded by this tool.
