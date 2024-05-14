@@ -280,14 +280,19 @@ pub async fn download_posts_from_txt(file_path: &String, api_source: &String, lo
     let mut reader = BufReader::new(txt_file);
     let mut txt_file_contents = String::new();
     let _ = reader.read_to_string(&mut txt_file_contents).await;
-    let id_list = txt_file_contents.trim().split("\n");
+    let id_list: Vec<&str> = txt_file_contents.trim().split("\n").collect();
+
+    if id_list.len() > 15 {
+        println!("Cannot have more then 15 Id's in the file. Exiting...");
+        return None
+    }
 
     let client = Client::builder();
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
     let client = client.default_headers(headers).build().unwrap();
 
-    for id in id_list.into_iter() {
+    for id in id_list.iter() {
         let target = format!("https://{}/posts.json?tags=id:{}", api_source, id);
 
         let posts = client.get(&target).send().await.expect("Err").json::<Posts>().await.expect("Err");
