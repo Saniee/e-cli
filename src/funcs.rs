@@ -17,7 +17,7 @@ pub async fn download(target_url: &String, file_ext: &String, post_id: u64, arti
     let mut bytes: usize = 0;
 
     let pb = ProgressBar::new(content_length);
-    pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{bar:.green/red}] {bytes}/{total_bytes} ({bytes_per_sec}), {eta} {msg}")
+    pb.set_style(ProgressStyle::with_template("{spinner:.cyan} [{elapsed_precise}] [{bar:.cyan/red}] {bytes}/{total_bytes} ({bytes_per_sec}), {eta}")
     .unwrap()
     .progress_chars("#>-"));
 
@@ -27,7 +27,6 @@ pub async fn download(target_url: &String, file_ext: &String, post_id: u64, arti
     }
 
     out.flush().await.expect("Err");
-    pb.finish_with_message("Done");
 
     bytes as f64
 }
