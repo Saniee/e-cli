@@ -75,14 +75,6 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
 </pre></div><pre class="rust"><code><span class="attr">#![doc = <span class="macro">include_str!</span>(<span class="string">"../docs_markdown/main.md"</span>)]
 
 </span><span class="kw">use </span>std::path::Path;
@@ -149,14 +141,6 @@
         </span>}
     }
 
-    <span class="kw">let </span>notice: String = {
-        <span class="kw">if </span>args.lower_quality {
-            <span class="string">"\nMay be incorrect with the --lower-quality tag."</span>.to_string()
-        } <span class="kw">else </span>{
-            <span class="string">""</span>.to_string()
-        }
-    };
-
     <span class="comment">// Dynamically output the converted file_size appropriate to its designation
     </span><span class="kw">let </span>size_conversion: String = <span class="kw">if </span>bytes_downloaded/<span class="number">1024.0</span>/<span class="number">1024.0 </span>&lt; <span class="number">1.0 </span>{
         <span class="macro">format!</span>(<span class="string">"{:.2} KB"</span>, bytes_downloaded/<span class="number">1024.0</span>)
@@ -164,6 +148,6 @@
         <span class="macro">format!</span>(<span class="string">"{:.2} MB"</span>, bytes_downloaded/<span class="number">1024.0</span>/<span class="number">1024.0</span>)
     };
 
-    <span class="macro">println!</span>(<span class="string">"Whole Program took: {} seconds! Downloaded a total of: {}{}"</span>, fn_start.elapsed().as_secs(), size_conversion, notice);
+    <span class="macro">println!</span>(<span class="string">"Whole Program took: {} seconds! Downloaded a total of: {}"</span>, fn_start.elapsed().as_secs(), size_conversion);
 }
 </code></pre></div></section></main></body></html>

@@ -140,11 +140,25 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Special functions for the cli that would otherwise be reused multiple times.
 
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::path::Path;
 
+<span class="kw">use </span>indicatif::{ProgressBar, ProgressStyle};
 <span class="kw">use </span>tokio::{fs::create_dir_all, io::AsyncWriteExt};
 <span class="kw">use </span>tokio::fs::File;
 
@@ -152,13 +166,25 @@
 
 <span class="doccomment">/// This function downloads the file with reqwest and returns the size of it in bytes.
 </span><span class="kw">pub async fn </span>download(target_url: <span class="kw-2">&amp;</span>String, file_ext: <span class="kw-2">&amp;</span>String, post_id: u64, artist_name: <span class="kw-2">&amp;</span>String) -&gt; f64 {
-    <span class="kw">let </span>bytes = reqwest::get(target_url).<span class="kw">await</span>.expect(<span class="string">"Err"</span>).bytes().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
-
+    <span class="kw">let </span><span class="kw-2">mut </span>res = reqwest::get(target_url).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+    <span class="kw">let </span>content_length = res.content_length().unwrap();
     <span class="kw">let </span><span class="kw-2">mut </span>out = File::create(<span class="macro">format!</span>(<span class="string">"./dl/{}-{}.{}"</span>, artist_name, post_id, file_ext)).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
-    out.write_all(<span class="kw-2">&amp;</span>bytes).<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
-    out.flush().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes: usize = <span class="number">0</span>;
 
-    bytes.len() <span class="kw">as </span>f64
+    <span class="kw">let </span>pb = ProgressBar::new(content_length);
+    pb.set_style(ProgressStyle::with_template(<span class="string">"{spinner:.green} [{elapsed_precise}] [{bar:.green/red}] {bytes}/{total_bytes} ({bytes_per_sec}), {eta} {msg}"</span>)
+    .unwrap()
+    .progress_chars(<span class="string">"#&gt;-"</span>));
+
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(chunk) = res.chunk().<span class="kw">await</span>.unwrap_or(<span class="prelude-val">None</span>) {
+        bytes += out.write(<span class="kw-2">&amp;</span>chunk).<span class="kw">await</span>.unwrap();
+        pb.set_position(bytes <span class="kw">as </span>u64)
+    }
+
+    out.flush().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+    pb.finish_with_message(<span class="string">"Done"</span>);
+
+    bytes <span class="kw">as </span>f64
 }
 
 <span class="doccomment">/// This function uses the [fn@download] function to download parsed lower quality versions of the posts.

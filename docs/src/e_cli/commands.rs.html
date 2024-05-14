@@ -322,6 +322,21 @@
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! The module with all the command functions.
 
 </span><span class="kw">use </span>std::path::Path;
@@ -359,6 +374,11 @@
     <span class="kw">let </span>target: String = <span class="macro">format!</span>(<span class="string">"https://{}/posts.json?tags=fav:{} {} {}&amp;limit={}"</span>, api_source, username, tags, random_check , count);
 
     <span class="kw">let </span>data: Posts  = client.get(target).send().<span class="kw">await</span>.expect(<span class="string">"Err"</span>).json::&lt;Posts&gt;().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
+
+    <span class="kw">if </span>data.posts.len() == <span class="number">0 </span>{
+        <span class="macro">println!</span>(<span class="string">"No post found..."</span>);
+        <span class="kw">return </span><span class="prelude-val">None
+    </span>}
 
     <span class="kw">let </span>created_dir = create_dl_dir().<span class="kw">await</span>;
     <span class="kw">if </span>created_dir {
@@ -421,6 +441,11 @@
         <span class="macro">println!</span>(<span class="string">"Created a ./dl/ directory for all the downloaded files.\n"</span>)
     }
 
+    <span class="kw">if </span>data.posts.len() == <span class="number">0 </span>{
+        <span class="macro">println!</span>(<span class="string">"No post found..."</span>);
+        <span class="kw">return </span><span class="prelude-val">None
+    </span>}
+
     <span class="kw">let </span>artist_name = parse_artists(<span class="kw-2">&amp;</span>data.posts[<span class="number">0</span>].tags);
 
     <span class="kw">let </span>path_string = <span class="macro">format!</span>(<span class="string">"./dl/{}-{}.{}"</span>, artist_name, data.posts[<span class="number">0</span>].id, data.posts[<span class="number">0</span>].file.ext);
@@ -478,7 +503,7 @@
     <span class="kw">let </span>posts = <span class="kw">match </span>parse_result {
         <span class="prelude-val">Ok</span>(posts) =&gt; {posts}
         <span class="prelude-val">Err</span>(err) =&gt; {
-            <span class="macro">println!</span>(<span class="string">"An error occured when the pgoram tried to parse the data from the file. Err {}"</span>, err);
+            <span class="macro">println!</span>(<span class="string">"An error occured when the program tried to parse the data from the file. Err {}"</span>, err);
             <span class="kw">return </span><span class="prelude-val">None
         </span>}
     };
@@ -594,14 +619,19 @@
     <span class="kw">let </span><span class="kw-2">mut </span>reader = BufReader::new(txt_file);
     <span class="kw">let </span><span class="kw-2">mut </span>txt_file_contents = String::new();
     <span class="kw">let _ </span>= reader.read_to_string(<span class="kw-2">&amp;mut </span>txt_file_contents).<span class="kw">await</span>;
-    <span class="kw">let </span>id_list = txt_file_contents.trim().split(<span class="string">"\n"</span>);
+    <span class="kw">let </span>id_list: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = txt_file_contents.trim().split(<span class="string">"\n"</span>).collect();
+
+    <span class="kw">if </span>id_list.len() &gt; <span class="number">15 </span>{
+        <span class="macro">println!</span>(<span class="string">"Cannot have more then 15 Id's in the file. Exiting..."</span>);
+        <span class="kw">return </span><span class="prelude-val">None
+    </span>}
 
     <span class="kw">let </span>client = Client::builder();
     <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_static(<span class="string">"rust-powered-post-download/0.1"</span>));
     <span class="kw">let </span>client = client.default_headers(headers).build().unwrap();
 
-    <span class="kw">for </span>id <span class="kw">in </span>id_list.into_iter() {
+    <span class="kw">for </span>id <span class="kw">in </span>id_list.iter() {
         <span class="kw">let </span>target = <span class="macro">format!</span>(<span class="string">"https://{}/posts.json?tags=id:{}"</span>, api_source, id);
 
         <span class="kw">let </span>posts = client.get(<span class="kw-2">&amp;</span>target).send().<span class="kw">await</span>.expect(<span class="string">"Err"</span>).json::&lt;Posts&gt;().<span class="kw">await</span>.expect(<span class="string">"Err"</span>);
