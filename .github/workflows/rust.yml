@@ -44,9 +44,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact
+        uses: actions/download-artifact@v4
       - name: Create new Release
-        uses: softprops/action-gh-release
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: |
