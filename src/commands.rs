@@ -7,38 +7,53 @@ use reqwest::{header::HeaderMap, header::HeaderValue, header::USER_AGENT};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 
-use crate::type_defs::api_defs::{Post, Posts};
 use crate::funcs::{self, create_dl_dir, debug_response_file, parse_artists};
+use crate::type_defs::api_defs::{Post, Posts};
 
 /// This function takes the arguments of [crate::cli::Commands::DownloadFavourites] and uses them to download the specified amount of media.
-pub async fn download_favourites(username: &String, count: &u8, random: &bool, tags: &String, lower_quality: &bool, api_source: &String) -> Option<f64> {
+pub async fn download_favourites(
+    username: &String,
+    count: &u8,
+    random: &bool,
+    tags: &String,
+    lower_quality: &bool,
+    api_source: &String,
+) -> Option<f64> {
     // println!("{}", args.random);
-    println!("Downloading {} Favorites of {} into the ./dl/ folder!\n", count, username);
+    println!(
+        "Downloading {} Favorites of {} into the ./dl/ folder!\n",
+        count, username
+    );
 
     let client = Client::builder();
     let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static("rust-powered-post-download/0.1"),
+    );
     let client = client.default_headers(headers).build().unwrap();
 
-    let random_check: &str = if *random {
-        "order:random"
-    } else {
-        ""
-    };
+    let random_check: &str = if *random { "order:random" } else { "" };
 
-    let tags: &str = if !tags.is_empty() {
-        tags
-    } else {
-        ""
-    };
+    let tags: &str = if !tags.is_empty() { tags } else { "" };
 
-    let target: String = format!("https://{}/posts.json?tags=fav:{} {} {}&limit={}", api_source, username, tags, random_check , count);
+    let target: String = format!(
+        "https://{}/posts.json?tags=fav:{} {} {}&limit={}",
+        api_source, username, tags, random_check, count
+    );
 
-    let data: Posts  = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Err");
+    let data: Posts = client
+        .get(target)
+        .send()
+        .await
+        .expect("Err")
+        .json::<Posts>()
+        .await
+        .expect("Err");
 
     if data.posts.len() == 0 {
         println!("No post found...");
-        return None
+        return None;
     }
 
     let created_dir = create_dl_dir().await;
@@ -53,7 +68,10 @@ pub async fn download_favourites(username: &String, count: &u8, random: &bool, t
         let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
         let path = Path::new(&path_string);
 
-        println!("Starting download of {}-{}.{}", artist_name, post.id, post.file.ext);
+        println!(
+            "Starting download of {}-{}.{}",
+            artist_name, post.id, post.file.ext
+        );
 
         if !path.exists() {
             let file_size: f64;
@@ -62,20 +80,33 @@ pub async fn download_favourites(username: &String, count: &u8, random: &bool, t
             } else {
                 match &post.file.url {
                     Some(url) => {
-                        file_size = funcs::download(url, &post.file.ext, post.id, &artist_name).await
+                        file_size =
+                            funcs::download(url, &post.file.ext, post.id, &artist_name).await
                     }
                     None => {
-                        println!("Cannot download post {}-{} due to it missing a file url", artist_name, post.id);
+                        println!(
+                            "Cannot download post {}-{} due to it missing a file url",
+                            artist_name, post.id
+                        );
                         file_size = 0.0;
                     }
                 }
             }
 
-            println!("Downloaded {}-{}.{}! File size: {:.2} MB\n", artist_name, post.id, post.file.ext, file_size/1024.0/1024.0);
+            println!(
+                "Downloaded {}-{}.{}! File size: {:.2} MB\n",
+                artist_name,
+                post.id,
+                post.file.ext,
+                file_size / 1024.0 / 1024.0
+            );
 
             dl_size += file_size
         } else {
-            println!("File {}-{}.{} already Exists!\n", artist_name, post.id, post.file.ext)
+            println!(
+                "File {}-{}.{} already Exists!\n",
+                artist_name, post.id, post.file.ext
+            )
         }
     }
 
@@ -87,15 +118,29 @@ pub async fn download_favourites(username: &String, count: &u8, random: &bool, t
 }
 
 /// This function takes the arguments of [crate::cli::Commands::DownloadPost] and uses them to download a single post with the specified ID.
-pub async fn download_post(post_id: &u64, lower_quality: &bool, api_source: &String) -> Option<f64> {
+pub async fn download_post(
+    post_id: &u64,
+    lower_quality: &bool,
+    api_source: &String,
+) -> Option<f64> {
     let client = Client::builder();
     let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static("rust-powered-post-download/0.1"),
+    );
     let client = client.default_headers(headers).build().unwrap();
 
     let target: String = format!("https://{}/posts.json?tags=id:{}", api_source, post_id);
 
-    let data = client.get(target).send().await.expect("Err").json::<Posts>().await.expect("Couldn't get json.");
+    let data = client
+        .get(target)
+        .send()
+        .await
+        .expect("Err")
+        .json::<Posts>()
+        .await
+        .expect("Couldn't get json.");
 
     let created_dir = create_dl_dir().await;
     if created_dir {
@@ -104,15 +149,21 @@ pub async fn download_post(post_id: &u64, lower_quality: &bool, api_source: &Str
 
     if data.posts.len() == 0 {
         println!("No post found...");
-        return None
+        return None;
     }
 
     let artist_name = parse_artists(&data.posts[0].tags);
 
-    let path_string = format!("./dl/{}-{}.{}", artist_name, data.posts[0].id, data.posts[0].file.ext);
+    let path_string = format!(
+        "./dl/{}-{}.{}",
+        artist_name, data.posts[0].id, data.posts[0].file.ext
+    );
     let path = Path::new(&path_string);
 
-    println!("Starting download of {}-{}.{}", artist_name, data.posts[0].id, data.posts[0].file.ext);
+    println!(
+        "Starting download of {}-{}.{}",
+        artist_name, data.posts[0].id, data.posts[0].file.ext
+    );
 
     if !path.exists() {
         let file_size: f64;
@@ -121,24 +172,42 @@ pub async fn download_post(post_id: &u64, lower_quality: &bool, api_source: &Str
         } else {
             match &data.posts[0].file.url {
                 Some(url) => {
-                    file_size = funcs::download(url, &data.posts[0].file.ext, data.posts[0].id, &artist_name).await;
+                    file_size = funcs::download(
+                        url,
+                        &data.posts[0].file.ext,
+                        data.posts[0].id,
+                        &artist_name,
+                    )
+                    .await;
                 }
                 None => {
-                    println!("Cannot download post {}-{} due to it missing a file url", artist_name, data.posts[0].id);
+                    println!(
+                        "Cannot download post {}-{} due to it missing a file url",
+                        artist_name, data.posts[0].id
+                    );
                     file_size = 0.0;
                 }
             }
         }
-        println!("Downloaded {}-{}.{}! File size: {:.2} KB\n", artist_name, data.posts[0].id, data.posts[0].file.ext, file_size/1024.0);
+        println!(
+            "Downloaded {}-{}.{}! File size: {:.2} KB\n",
+            artist_name,
+            data.posts[0].id,
+            data.posts[0].file.ext,
+            file_size / 1024.0
+        );
         Some(file_size)
     } else {
-        println!("File {}-{}.{} already Exists!\n", artist_name, data.posts[0].id, data.posts[0].file.ext);
+        println!(
+            "File {}-{}.{} already Exists!\n",
+            artist_name, data.posts[0].id, data.posts[0].file.ext
+        );
         None
     }
 }
 
 /// This function accepts a file path from the args. Parses that json file and then downloads the posts. This function uses the get-pages subcommand.
-pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) -> Option<f64>{
+pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) -> Option<f64> {
     println!("Downloading posts from a file with data.");
 
     let created_dir = create_dl_dir().await;
@@ -147,13 +216,13 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
     }
 
     let mut dl_size: f64 = 0.0;
-    
+
     let data_file_result = File::open(file_path).await;
     let mut data_file = match data_file_result {
-        Ok(f) => {f}
+        Ok(f) => f,
         Err(err) => {
             println!("An error occured when the program tried to open the file containing the data. Err {}", err);
-            return None
+            return None;
         }
     };
 
@@ -162,10 +231,13 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
 
     let parse_result = serde_json::from_str::<Vec<Post>>(&str_data);
     let posts = match parse_result {
-        Ok(posts) => {posts}
+        Ok(posts) => posts,
         Err(err) => {
-            println!("An error occured when the program tried to parse the data from the file. Err {}", err);
-            return None
+            println!(
+                "An error occured when the program tried to parse the data from the file. Err {}",
+                err
+            );
+            return None;
         }
     };
 
@@ -177,7 +249,10 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
         let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
         let path = Path::new(&path_string);
 
-        println!("Starting download of {}-{}.{}", artist_name, post.id, post.file.ext);
+        println!(
+            "Starting download of {}-{}.{}",
+            artist_name, post.id, post.file.ext
+        );
 
         if !path.exists() {
             let file_size: f64;
@@ -186,20 +261,33 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
             } else {
                 match &post.file.url {
                     Some(url) => {
-                        file_size = funcs::download(url, &post.file.ext, post.id, &artist_name).await
+                        file_size =
+                            funcs::download(url, &post.file.ext, post.id, &artist_name).await
                     }
                     None => {
-                        println!("Cannot download post {}-{} due to it missing a file url", artist_name, post.id);
+                        println!(
+                            "Cannot download post {}-{} due to it missing a file url",
+                            artist_name, post.id
+                        );
                         file_size = 0.0;
                     }
                 }
             }
 
-            println!("Downloaded {}-{}.{}! File size: {:.2} MB\n", artist_name, post.id, post.file.ext, file_size/1024.0/1024.0);
+            println!(
+                "Downloaded {}-{}.{}! File size: {:.2} MB\n",
+                artist_name,
+                post.id,
+                post.file.ext,
+                file_size / 1024.0 / 1024.0
+            );
 
             dl_size += file_size
         } else {
-            println!("File {}-{}.{} already Exists!\n", artist_name, post.id, post.file.ext)
+            println!(
+                "File {}-{}.{} already Exists!\n",
+                artist_name, post.id, post.file.ext
+            )
         }
     }
 
@@ -212,36 +300,63 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
 
 /// This function takes tags and the page count and fetches posts. Then it saves them into a file named posts.json in the root dir.
 pub async fn fetch_posts(tags: &String, count: &u8, api_source: &String) {
-    println!("Getting {} pages and putting the id's into a json file.", count);
-    
+    println!(
+        "Getting {} pages and putting the id's into a json file.",
+        count
+    );
+
     let client = Client::builder();
     let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static("rust-powered-post-download/0.1"),
+    );
     let client = client.default_headers(headers).build().unwrap();
 
     let json_file_result = File::create("./posts.json").await;
     let mut json_file = match json_file_result {
-        Ok(f) => { f }
+        Ok(f) => f,
         Err(err) => {
             println!("Cannot continue due to an err. {}", err);
-            return
+            return;
         }
     };
 
     let mut page: u8 = 0;
     let mut posts = Vec::new();
     while &page < count {
-        let target: String = format!("https://{}/posts.json?tags={}&limit=250&page={}", api_source, tags, page+1);
+        let target: String = format!(
+            "https://{}/posts.json?tags={}&limit=250&page={}",
+            api_source,
+            tags,
+            page + 1
+        );
 
-        let data_result = client.get(&target).send().await.expect("Err").json::<Posts>().await;
+        let data_result = client
+            .get(&target)
+            .send()
+            .await
+            .expect("Err")
+            .json::<Posts>()
+            .await;
 
         let data = match data_result {
-            Ok(data) => {data}
+            Ok(data) => data,
             Err(err) => {
-                println!("Parsing data failed. Creating a debug json file with all of it. Err: {}", err);
-                let response = client.get(&target).send().await.expect("Err").text().await.expect("Err");
+                println!(
+                    "Parsing data failed. Creating a debug json file with all of it. Err: {}",
+                    err
+                );
+                let response = client
+                    .get(&target)
+                    .send()
+                    .await
+                    .expect("Err")
+                    .text()
+                    .await
+                    .expect("Err");
                 debug_response_file(&response).await;
-                return
+                return;
             }
         };
 
@@ -258,14 +373,18 @@ pub async fn fetch_posts(tags: &String, count: &u8, api_source: &String) {
 }
 
 /// Reads a txt file, parses it into a list and then iters over it to download each post.
-pub async fn download_posts_from_txt(file_path: &String, api_source: &String, lower_quality: &bool) -> Option<f64> {
+pub async fn download_posts_from_txt(
+    file_path: &String,
+    api_source: &String,
+    lower_quality: &bool,
+) -> Option<f64> {
     let txt_file_path = Path::new(file_path);
     let txt_file_result = File::open(txt_file_path).await;
 
     let mut dl_size: f64 = 0.0;
 
     let txt_file = match txt_file_result {
-        Ok(file) => {file}
+        Ok(file) => file,
         Err(err) => {
             println!("Err {}", err);
             panic!("{}", err)
@@ -284,18 +403,28 @@ pub async fn download_posts_from_txt(file_path: &String, api_source: &String, lo
 
     if id_list.len() > 15 {
         println!("Cannot have more then 15 Id's in the file. Exiting...");
-        return None
+        return None;
     }
 
     let client = Client::builder();
     let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static("rust-powered-post-download/0.1"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static("rust-powered-post-download/0.1"),
+    );
     let client = client.default_headers(headers).build().unwrap();
 
     for id in id_list.iter() {
         let target = format!("https://{}/posts.json?tags=id:{}", api_source, id);
 
-        let posts = client.get(&target).send().await.expect("Err").json::<Posts>().await.expect("Err");
+        let posts = client
+            .get(&target)
+            .send()
+            .await
+            .expect("Err")
+            .json::<Posts>()
+            .await
+            .expect("Err");
         let post = &posts.posts[0];
 
         let artist_name = parse_artists(&post.tags);
@@ -303,7 +432,10 @@ pub async fn download_posts_from_txt(file_path: &String, api_source: &String, lo
         let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
         let path = Path::new(&path_string);
 
-        println!("Starting download of {}-{}.{}", artist_name, post.id, post.file.ext);
+        println!(
+            "Starting download of {}-{}.{}",
+            artist_name, post.id, post.file.ext
+        );
 
         if !path.exists() {
             let file_size: f64;
@@ -312,20 +444,33 @@ pub async fn download_posts_from_txt(file_path: &String, api_source: &String, lo
             } else {
                 match &post.file.url {
                     Some(url) => {
-                        file_size = funcs::download(url, &post.file.ext, post.id, &artist_name).await
+                        file_size =
+                            funcs::download(url, &post.file.ext, post.id, &artist_name).await
                     }
                     None => {
-                        println!("Cannot download post {}-{} due to it missing a file url", artist_name, post.id);
+                        println!(
+                            "Cannot download post {}-{} due to it missing a file url",
+                            artist_name, post.id
+                        );
                         file_size = 0.0;
                     }
                 }
             }
 
-            println!("Downloaded {}-{}.{}! File size: {:.2} MB\n", artist_name, post.id, post.file.ext, file_size/1024.0/1024.0);
+            println!(
+                "Downloaded {}-{}.{}! File size: {:.2} MB\n",
+                artist_name,
+                post.id,
+                post.file.ext,
+                file_size / 1024.0 / 1024.0
+            );
 
             dl_size += file_size
         } else {
-            println!("File {}-{}.{} already Exists!\n", artist_name, post.id, post.file.ext)
+            println!(
+                "File {}-{}.{} already Exists!\n",
+                artist_name, post.id, post.file.ext
+            )
         }
     }
 
