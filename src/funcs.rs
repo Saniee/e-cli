@@ -63,14 +63,11 @@ pub async fn lower_quality_dl(post: &Post, artist_name: &String) -> f64 {
             }
         }
     } else {
-        match &post.file.url {
-            Some(url) => {
-                download(url, &post.file.ext, post.id, artist_name).await
-            }
-            None => {
-                println!("Cannot download post {}-{} due it not having any file url.", artist_name, &post.id);
-                0.0
-            }
+        if let Some(url) = &post.file.url {
+            download(url, &post.file.ext, post.id, artist_name).await
+        } else {
+            println!("Cannot download post {}-{} due it not having any file url.", artist_name, &post.id);
+            0.0
         }
     }
 }
