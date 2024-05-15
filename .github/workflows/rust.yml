@@ -6,6 +6,8 @@ on:
     paths:
       - "**.rs"
       - "**.toml"
+    tags:
+      - "v*.*.*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -37,3 +39,16 @@ jobs:
       with:
         path: ./build-dir/release/e-cli.exe
         name: windows_release_x64
+  publish-release:
+    needs: [linux-build, windows-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact
+      - name: Create new Release
+        uses: softprops/action-gh-release
+        with:
+          draft: true
+          files: |
+            e-cli.exe
+            e-cli
