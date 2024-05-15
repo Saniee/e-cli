@@ -53,7 +53,7 @@
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Posts {
-    <span class="kw">pub </span>posts: Vec&lt;Post&gt;
+    <span class="kw">pub </span>posts: Vec&lt;Post&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
@@ -61,36 +61,37 @@
     <span class="kw">pub </span>id: u64,
     <span class="kw">pub </span>file: File,
     <span class="kw">pub </span>tags: Tags,
-    <span class="kw">pub </span>sample: Sample
+    <span class="kw">pub </span>sample: Sample,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>File {
     <span class="kw">pub </span>ext: String,
-    <span class="kw">pub </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;
+    <span class="kw">pub </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Tags {
-    <span class="kw">pub </span>artist: Vec&lt;String&gt;
+    <span class="kw">pub </span>artist: Vec&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Sample {
     <span class="kw">pub </span>has: bool,
     <span class="kw">pub </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="kw">pub </span>alternates: Alternates
+    <span class="kw">pub </span>alternates: Alternates,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Alternates {
     <span class="attr">#[serde(rename = <span class="string">"480p"</span>)]
-    </span><span class="kw">pub </span>lower_quality: <span class="prelude-ty">Option</span>&lt;LowerQuality&gt;
+    </span><span class="kw">pub </span>lower_quality: <span class="prelude-ty">Option</span>&lt;LowerQuality&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LowerQuality {
     <span class="attr">#[serde(rename = <span class="string">"type"</span>)]
     </span><span class="kw">pub </span>media_type: String,
-    <span class="kw">pub </span>urls: Vec&lt;String&gt;
-}</code></pre></div></section></main></body></html>
+    <span class="kw">pub </span>urls: Vec&lt;String&gt;,
+}
+</code></pre></div></section></main></body></html>
