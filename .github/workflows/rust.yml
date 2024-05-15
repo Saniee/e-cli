@@ -43,6 +43,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
+        with:  
+          merge-multiple: true
+          path: ./build_artifacts
       - name: Download Artifacts
         run: ls -R
       - name: Create new Release
@@ -50,5 +53,5 @@ jobs:
         with:
           draft: true
           files: |
-            linux_release_x64/e.cli
-            windows_release_x64/e.cli.exe
+            ./build_artifacts/e-cli
+            ./build_artifacts/e-cli.exe
