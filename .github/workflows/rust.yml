@@ -1,4 +1,4 @@
-name: Rust Binary Build
+name: Release Build
 
 on:
   push:
@@ -38,7 +38,7 @@ jobs:
       with:
         path: ./build-dir/release/e-cli.exe
         name: windows_release_x64
-  publish-release:
+  draft-release:
     needs: [linux-build, windows-build]
     runs-on: ubuntu-latest
     steps:
@@ -50,5 +50,5 @@ jobs:
         with:
           draft: true
           files: |
-            linux_release_x64 
-            windows_release_x64 
+            linux_release_x64/e.cli
+            windows_release_x64/e.cli.exe
