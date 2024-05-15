@@ -2,12 +2,11 @@ name: Rust Binary Build
 
 on:
   push:
-    branches: [ "master" ]
-    paths:
-      - "**.rs"
-      - "**.toml"
     tags:
       - "v*.*.*"
+
+permissions:
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -43,12 +42,13 @@ jobs:
     needs: [linux-build, windows-build]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/download-artifact@v4
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        run: ls -R
       - name: Create new Release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: |
-            e-cli.exe
-            e-cli
+            linux_release_x64 
+            windows_release_x64 
