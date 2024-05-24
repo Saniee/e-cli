@@ -1,6 +1,6 @@
 [package]
 name = "e-cli"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Saniee"]
 repository = "https://github.com/Saniee/e-cli"
 documentation = "https://saniee.github.io/e-cli/"

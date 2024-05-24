@@ -49,17 +49,15 @@ pub async fn lower_quality_dl(post: &Post, artist_name: &String) -> f64 {
             if lower_quality.media_type == "video" {
                 download(&lower_quality.urls[0], &post.file.ext, post.id, artist_name).await
             // Get the sample url instead when its an image etc. Since they have only one url.
+            } else if let Some(sample_url) = &post.sample.url {
+                download(sample_url, &post.file.ext, post.id, artist_name).await
+            // If all fails, print verbose and return 0 as the bytes downloaded
             } else {
-                if let Some(sample_url) = &post.sample.url {
-                    download(sample_url, &post.file.ext, post.id, artist_name).await
-                // If all fails, print verbose and return 0 as the bytes downloaded
-                } else {
-                    println!(
-                        "Cannot download post {}-{} due it not having any file url.",
-                        artist_name, &post.id
-                    );
-                    0.0
-                }
+                println!(
+                    "Cannot download post {}-{} due it not having any file url.",
+                    artist_name, &post.id
+                );
+                0.0
             }
         // Get the sample url if there was no lower_quality found
         } else {
@@ -75,16 +73,14 @@ pub async fn lower_quality_dl(post: &Post, artist_name: &String) -> f64 {
                 0.0
             }
         }
+    } else if let Some(url) = &post.file.url {
+        download(url, &post.file.ext, post.id, artist_name).await
     } else {
-        if let Some(url) = &post.file.url {
-            download(url, &post.file.ext, post.id, artist_name).await
-        } else {
-            println!(
-                "Cannot download post {}-{} due it not having any file url.",
-                artist_name, &post.id
-            );
-            0.0
-        }
+        println!(
+            "Cannot download post {}-{} due it not having any file url.",
+            artist_name, &post.id
+        );
+        0.0
     }
 }
 

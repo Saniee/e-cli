@@ -51,7 +51,7 @@ pub async fn download_favourites(
         .await
         .expect("Err");
 
-    if data.posts.len() == 0 {
+    if data.posts.is_empty() {
         println!("No post found...");
         return None;
     }
@@ -147,7 +147,7 @@ pub async fn download_post(
         println!("Created a ./dl/ directory for all the downloaded files.\n")
     }
 
-    if data.posts.len() == 0 {
+    if data.posts.is_empty() {
         println!("No post found...");
         return None;
     }
@@ -399,7 +399,7 @@ pub async fn download_posts_from_txt(
     let mut reader = BufReader::new(txt_file);
     let mut txt_file_contents = String::new();
     let _ = reader.read_to_string(&mut txt_file_contents).await;
-    let id_list: Vec<&str> = txt_file_contents.trim().split("\n").collect();
+    let id_list: Vec<&str> = txt_file_contents.trim().split('\n').collect();
 
     if id_list.len() > 15 {
         println!("Cannot have more then 15 Id's in the file. Exiting...");
@@ -440,7 +440,7 @@ pub async fn download_posts_from_txt(
         if !path.exists() {
             let file_size: f64;
             if *lower_quality {
-                file_size = funcs::lower_quality_dl(&post, &artist_name).await
+                file_size = funcs::lower_quality_dl(post, &artist_name).await
             } else {
                 match &post.file.url {
                     Some(url) => {
