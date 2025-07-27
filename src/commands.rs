@@ -1,28 +1,29 @@
 //! The module with all the command functions.
 
 use std::path::Path;
+use std::time::Duration;
 
 use reqwest::Client;
 use reqwest::{header::HeaderMap, header::HeaderValue, header::USER_AGENT};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::runtime;
 
-use crate::funcs::{self, create_dl_dir, debug_response_file, parse_artists};
+use crate::funcs::{self, create_dl_dir, debug_response_file, parse_artists, slice_arr};
 use crate::type_defs::api_defs::{Post, Posts};
 
 /// This function takes the arguments of [crate::cli::Commands::DownloadFavourites] and uses them to download the specified amount of media.
 pub async fn download_favourites(
-    username: &String,
+    username: &str,
     count: &u8,
     random: &bool,
-    tags: &String,
+    tags: &str,
     lower_quality: &bool,
-    api_source: &String,
+    api_source: &str,
 ) -> Option<f64> {
     // println!("{}", args.random);
     println!(
-        "Downloading {} Favorites of {} into the ./dl/ folder!\n",
-        count, username
+        "Downloading {count} Favorites of {username} into the ./dl/ folder!\n"
     );
 
     let client = Client::builder();
@@ -38,8 +39,7 @@ pub async fn download_favourites(
     let tags: &str = if !tags.is_empty() { tags } else { "" };
 
     let target: String = format!(
-        "https://{}/posts.json?tags=fav:{} {} {}&limit={}",
-        api_source, username, tags, random_check, count
+        "https://{api_source}/posts.json?tags=fav:{username} {tags} {random_check}&limit={count}"
     );
 
     let data: Posts = client
@@ -61,54 +61,14 @@ pub async fn download_favourites(
         println!("Created a ./dl/ directory for all the downloaded files.\n")
     }
 
+    #[allow(unused_mut)]
     let mut dl_size: f64 = 0.0;
-    for post in data.posts {
-        let artist_name = parse_artists(&post.tags);
+    let sliced_data = slice_arr(data, 5);
+    
 
-        let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
-        let path = Path::new(&path_string);
-
-        println!(
-            "Starting download of {}-{}.{}",
-            artist_name, post.id, post.file.ext
-        );
-
-        if !path.exists() {
-            let file_size: f64;
-            if *lower_quality {
-                file_size = funcs::lower_quality_dl(&post, &artist_name).await
-            } else {
-                match &post.file.url {
-                    Some(url) => {
-                        file_size =
-                            funcs::download(url, &post.file.ext, post.id, &artist_name).await
-                    }
-                    None => {
-                        println!(
-                            "Cannot download post {}-{} due to it missing a file url",
-                            artist_name, post.id
-                        );
-                        file_size = 0.0;
-                    }
-                }
-            }
-
-            println!(
-                "Downloaded {}-{}.{}! File size: {:.2} MB\n",
-                artist_name,
-                post.id,
-                post.file.ext,
-                file_size / 1024.0 / 1024.0
-            );
-
-            dl_size += file_size
-        } else {
-            println!(
-                "File {}-{}.{} already Exists!\n",
-                artist_name, post.id, post.file.ext
-            )
-        }
-    }
+    for posts in sliced_data.iter() {
+        let _ = tokio::spawn(funcs::download(posts.clone(), *lower_quality)).await;
+    };
 
     if dl_size > 0.0 {
         Some(dl_size)
@@ -131,7 +91,7 @@ pub async fn download_post(
     );
     let client = client.default_headers(headers).build().unwrap();
 
-    let target: String = format!("https://{}/posts.json?tags=id:{}", api_source, post_id);
+    let target: String = format!("https://{api_source}/posts.json?tags=id:{post_id}");
 
     let data = client
         .get(target)
@@ -168,11 +128,11 @@ pub async fn download_post(
     if !path.exists() {
         let file_size: f64;
         if *lower_quality {
-            file_size = funcs::lower_quality_dl(&data.posts[0], &artist_name).await;
+            file_size = funcs::lower_quality_dl_file(&data.posts[0], &artist_name).await;
         } else {
             match &data.posts[0].file.url {
                 Some(url) => {
-                    file_size = funcs::download(
+                    file_size = funcs::download_file(
                         url,
                         &data.posts[0].file.ext,
                         data.posts[0].id,
@@ -221,7 +181,7 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
     let mut data_file = match data_file_result {
         Ok(f) => f,
         Err(err) => {
-            println!("An error occured when the program tried to open the file containing the data. Err {}", err);
+            println!("An error occured when the program tried to open the file containing the data. Err {err}");
             return None;
         }
     };
@@ -234,8 +194,7 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
         Ok(posts) => posts,
         Err(err) => {
             println!(
-                "An error occured when the program tried to parse the data from the file. Err {}",
-                err
+                "An error occured when the program tried to parse the data from the file. Err {err}"
             );
             return None;
         }
@@ -257,12 +216,12 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
         if !path.exists() {
             let file_size: f64;
             if *lower_quality {
-                file_size = funcs::lower_quality_dl(&post, &artist_name).await
+                file_size = funcs::lower_quality_dl_file(&post, &artist_name).await
             } else {
                 match &post.file.url {
                     Some(url) => {
                         file_size =
-                            funcs::download(url, &post.file.ext, post.id, &artist_name).await
+                            funcs::download_file(url, &post.file.ext, post.id, &artist_name).await
                     }
                     None => {
                         println!(
@@ -301,8 +260,7 @@ pub async fn download_posts_from_file(file_path: &String, lower_quality: &bool) 
 /// This function takes tags and the page count and fetches posts. Then it saves them into a file named posts.json in the root dir.
 pub async fn fetch_posts(tags: &String, count: &u8, api_source: &String) {
     println!(
-        "Getting {} pages and putting the id's into a json file.",
-        count
+        "Getting {count} pages and putting the id's into a json file."
     );
 
     let client = Client::builder();
@@ -317,7 +275,7 @@ pub async fn fetch_posts(tags: &String, count: &u8, api_source: &String) {
     let mut json_file = match json_file_result {
         Ok(f) => f,
         Err(err) => {
-            println!("Cannot continue due to an err. {}", err);
+            println!("Cannot continue due to an err. {err}");
             return;
         }
     };
@@ -344,8 +302,7 @@ pub async fn fetch_posts(tags: &String, count: &u8, api_source: &String) {
             Ok(data) => data,
             Err(err) => {
                 println!(
-                    "Parsing data failed. Creating a debug json file with all of it. Err: {}",
-                    err
+                    "Parsing data failed. Creating a debug json file with all of it. Err: {err}"
                 );
                 let response = client
                     .get(&target)
@@ -386,7 +343,7 @@ pub async fn download_posts_from_txt(
     let txt_file = match txt_file_result {
         Ok(file) => file,
         Err(err) => {
-            println!("Err {}", err);
+            println!("Err {err}");
             panic!("{}", err)
         }
     };
@@ -415,7 +372,7 @@ pub async fn download_posts_from_txt(
     let client = client.default_headers(headers).build().unwrap();
 
     for id in id_list.iter() {
-        let target = format!("https://{}/posts.json?tags=id:{}", api_source, id);
+        let target = format!("https://{api_source}/posts.json?tags=id:{id}");
 
         let posts = client
             .get(&target)
@@ -440,12 +397,12 @@ pub async fn download_posts_from_txt(
         if !path.exists() {
             let file_size: f64;
             if *lower_quality {
-                file_size = funcs::lower_quality_dl(post, &artist_name).await
+                file_size = funcs::lower_quality_dl_file(post, &artist_name).await
             } else {
                 match &post.file.url {
                     Some(url) => {
                         file_size =
-                            funcs::download(url, &post.file.ext, post.id, &artist_name).await
+                            funcs::download_file(url, &post.file.ext, post.id, &artist_name).await
                     }
                     None => {
                         println!(
