@@ -4,9 +4,7 @@ use std::path::Path;
 
 use clap::Parser;
 use cli::Commands;
-use commands::{
-    download_favourites, download_post,
-};
+use commands::download_favourites;
 use tokio::{fs, time::Instant};
 
 pub mod cli;
@@ -45,9 +43,6 @@ async fn main() {
                 &args.api_source,
             )
             .await;
-        }
-        Some(Commands::DownloadPost { post_id }) => {
-            download_post(post_id, &args.lower_quality, &args.api_source).await;
         }
         None => return,
     }

@@ -32,7 +32,5 @@ pub enum Commands {
         random: bool,
         #[arg(long, default_value = "")]
         tags: String,
-    },
-    #[command[about = "Downloads a single post with the provided ID."]]
-    DownloadPost { post_id: u64 },
+    }
 }
