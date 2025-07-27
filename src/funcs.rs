@@ -3,14 +3,12 @@
 use std::cmp::Ordering;
 use std::path::Path;
 
-use indicatif::{ProgressBar, ProgressStyle};
 use tokio::fs::File;
 use tokio::{fs::create_dir_all, io::AsyncWriteExt};
 
 use crate::type_defs::api_defs::{Post, Posts, Tags};
 
 pub async fn download(data: Vec<Post>, lower_quality: bool) {
-    let mut dl_size: f64 = 0.0;
     for post in data {
         let artist_name = parse_artists(&post.tags);
 
@@ -46,8 +44,6 @@ pub async fn download(data: Vec<Post>, lower_quality: bool) {
                 post.file.ext,
                 file_size / 1024.0 / 1024.0
             );
-
-            dl_size += file_size
         } else {
             println!(
                 "File {}-{}.{} already Exists!",
@@ -59,10 +55,10 @@ pub async fn download(data: Vec<Post>, lower_quality: bool) {
 
 /// This function downloads the file with reqwest and returns the size of it in bytes.
 pub async fn download_file(
-    target_url: &String,
-    file_ext: &String,
+    target_url: &str,
+    file_ext: &str,
     post_id: u64,
-    artist_name: &String,
+    artist_name: &str,
 ) -> f64 {
     let mut res = reqwest::get(target_url).await.expect("Err");
     // let content_length = res.content_length().unwrap();
@@ -71,12 +67,8 @@ pub async fn download_file(
         .expect("Err");
     let mut bytes: usize = 0;
 
-    // let pb = ProgressBar::new(content_length);
-    // pb.set_style(ProgressStyle::with_template("{spinner:.cyan} [{elapsed_precise}] [{bar:.cyan/red}] {bytes}/{total_bytes} ({bytes_per_sec}), {eta}").unwrap().progress_chars("#>-"));
-
     while let Some(chunk) = res.chunk().await.unwrap_or(None) {
         bytes += out.write(&chunk).await.unwrap();
-        // pb.set_position(bytes as u64)
     }
 
     out.flush().await.expect("Err");
@@ -85,7 +77,7 @@ pub async fn download_file(
 }
 
 /// This function uses the [fn@download] function to download parsed lower quality versions of the posts.
-pub async fn lower_quality_dl_file(post: &Post, artist_name: &String) -> f64 {
+pub async fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
     println!("Trying to download lower quality media...");
     // Does the post have a sample? If yes, handle it accordingly.
     if post.sample.has {
@@ -173,6 +165,7 @@ pub async fn debug_response_file(response_body: &String) {
     file.flush().await.expect("Err");
 }
 
+/// Slices an array into chunks.
 pub fn slice_arr(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
     let mut res: Vec<Vec<Post>> = Vec::new();
     let posts = arr.posts;

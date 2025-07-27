@@ -5,8 +5,7 @@ use std::path::Path;
 use clap::Parser;
 use cli::Commands;
 use commands::{
-    download_favourites, download_post, download_posts_from_file, download_posts_from_txt,
-    fetch_posts,
+    download_favourites, download_post,
 };
 use tokio::{fs, time::Instant};
 
@@ -21,8 +20,6 @@ async fn main() {
     let args = cli::Args::parse();
 
     let fn_start = Instant::now();
-
-    let bytes_downloaded;
 
     match &args.command {
         Some(Commands::ClearDl) => {
@@ -39,7 +36,7 @@ async fn main() {
             random,
             tags,
         }) => {
-            let finished_return = download_favourites(
+            download_favourites(
                 username,
                 count,
                 random,
@@ -48,52 +45,15 @@ async fn main() {
                 &args.api_source,
             )
             .await;
-        
-            match finished_return {
-                Some(x) => bytes_downloaded = x,
-                None => bytes_downloaded = 0.0,
-            }
         }
         Some(Commands::DownloadPost { post_id }) => {
-            let finished_return =
-                download_post(post_id, &args.lower_quality, &args.api_source).await;
-            match finished_return {
-                Some(x) => bytes_downloaded = x,
-                None => bytes_downloaded = 0.0,
-            }
-        }
-        Some(Commands::DownloadPosts { file_path }) => {
-            let finished_return = download_posts_from_file(file_path, &args.lower_quality).await;
-            match finished_return {
-                Some(x) => bytes_downloaded = x,
-                None => bytes_downloaded = 0.0,
-            }
-        }
-        Some(Commands::DownloadPostsFromTxt { file_path }) => {
-            let finished_return =
-                download_posts_from_txt(file_path, &args.api_source, &args.lower_quality).await;
-            match finished_return {
-                Some(x) => bytes_downloaded = x,
-                None => bytes_downloaded = 0.0,
-            }
-        }
-        Some(Commands::GetPages { tags, count }) => {
-            fetch_posts(tags, count, &args.api_source).await;
-            return;
+            download_post(post_id, &args.lower_quality, &args.api_source).await;
         }
         None => return,
     }
 
-    // Dynamically output the converted file_size appropriate to its designation
-    let size_conversion: String = if bytes_downloaded / 1024.0 / 1024.0 < 1.0 {
-        format!("{:.2} KB", bytes_downloaded / 1024.0)
-    } else {
-        format!("{:.2} MB", bytes_downloaded / 1024.0 / 1024.0)
-    };
-
     println!(
-        "Whole Program took: {} seconds! Downloaded a total of: {}",
+        "Whole Program took: {} seconds!",
         fn_start.elapsed().as_secs(),
-        size_conversion
     );
 }
