@@ -19,6 +19,22 @@ What it can't do:
 
 # Usage
 
+### Specifying settings for the downloader.
+
+These can be set at the same time.
+
+#### Setting to use lower quality links.
+
+`e-cli -l | --lower-quality {Command} {Command Arguments}`
+
+#### Setting how many threads to use.
+
+`e-cli -t | --num-threads {number of threads, default is 5, max is 10} {Command} {Command Arguments}`
+
+#### Setting a different API source.
+
+`e-cli -a | --api-source "anything.net" {Command} {Command Arguments}`
+
 ## Downloading Favourites of a user with specific amount of posts.
 
 `e-cli download-favourites {Username} -c {Number of Posts}`

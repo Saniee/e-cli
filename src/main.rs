@@ -1,5 +1,3 @@
-#![doc = include_str!("../docs_markdown/main.md")]
-
 use std::{fs, path::Path, time::Instant};
 
 use clap::Parser;
@@ -11,9 +9,18 @@ pub mod commands;
 pub mod funcs;
 pub mod type_defs;
 
-/// Main function, handles the cli arguments.
 fn main() {
     let args = cli::Args::parse();
+
+    if args.num_threads > 10 {
+        return println!("Cannot go above 10 threads for downloads.");
+    }
+
+    if let Some(Commands::DownloadFavourites { username: _, count, random: _, tags: _ }) = &args.command {
+        if *count > 320 {
+            return println!("Cannot go above 320 posts per search query.");
+        }
+    }
 
     #[allow(unused_mut)]
     let mut bytes_downloaded;

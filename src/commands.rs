@@ -1,5 +1,3 @@
-//! The module with all the command functions.
-
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
@@ -13,14 +11,13 @@ use crate::type_defs::api_defs::Posts;
 /// This function takes the arguments of [crate::cli::Commands::DownloadFavourites] and uses them to download the specified amount of media.
 pub fn download_favourites(
     username: &str,
-    count: &u8,
+    count: &u32,
     random: &bool,
     tags: &str,
     lower_quality: &bool,
     api_source: &str,
     num_threads: usize
 ) -> f64 {
-    // println!("{}", args.random);
     println!(
         "Downloading {count} Favorites of {username} into the ./dl/ folder!\n"
     );

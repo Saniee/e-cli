@@ -1,5 +1,3 @@
-//! Special functions for the cli that would otherwise be reused multiple times.
-
 use std::path::Path;
 
 use std::fs::File;

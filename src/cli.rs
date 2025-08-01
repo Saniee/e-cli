@@ -1,12 +1,9 @@
-//! The cli definitions using [clap] derive
-
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(about = "E6 Tools")]
+#[command(about = "e-cli")]
 #[command(version, long_about = None)]
 #[command(arg_required_else_help = true)]
-/// The arguments, includes the subcommands from the [enum@Commands] and also a bool for lower quality dl.
 pub struct Args {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -17,23 +14,22 @@ pub struct Args {
     #[arg[long, short = 'l', help = "Tries to download the lower quality media files."]]
     pub lower_quality: bool,
 
-    #[arg(long, short = 't', help = "The number of threads to use for downloads.", default_value_t = 5)]
+    #[arg(long, short = 't', help = "The number of threads to use for downloads. Cannot set above 10.", default_value_t = 5)]
     pub num_threads: usize,
 }
 
 #[derive(Subcommand, PartialEq, Eq)]
-/// All the commands the CLI has.
 pub enum Commands {
     #[command[about = "Deletes the whole ./dl/ directory with it's contents."]]
     ClearDl,
     #[command[about = "Downloads the set amount of favourites from the username provided."]]
     DownloadFavourites {
         username: String,
-        #[arg(short, default_value_t = 5)]
-        count: u8,
-        #[arg(short, default_value_t = false)]
+        #[arg(short, help = "The amount of posts to get. Cannot set above 320 (Api Max.)", default_value_t = 5)]
+        count: u32,
+        #[arg(short, help = "Adds the order:random in the search.", default_value_t = false)]
         random: bool,
-        #[arg(long, default_value = "")]
+        #[arg(long, help = "Specify the search further with tags.", default_value = "")]
         tags: String,
     }
 }

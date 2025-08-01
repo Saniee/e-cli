@@ -1,5 +1,3 @@
-//! Api definitions for the E api.
-
 use std::cmp::Ordering;
 
 use serde::{Deserialize, Serialize};
