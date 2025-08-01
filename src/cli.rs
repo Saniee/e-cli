@@ -11,11 +11,14 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    #[arg[long, help = "Specify the api url to use.", default_value = "e926.net"]]
+    #[arg[long, short = 'a', help = "Specify the api url to use.", default_value = "e926.net"]]
     pub api_source: String,
 
-    #[arg[long, help = "Tries to download the lower quality media files."]]
+    #[arg[long, short = 'l', help = "Tries to download the lower quality media files."]]
     pub lower_quality: bool,
+
+    #[arg(long, short = 't', help = "The number of threads to use for downloads.", default_value_t = 5)]
+    pub num_threads: usize,
 }
 
 #[derive(Subcommand, PartialEq, Eq)]

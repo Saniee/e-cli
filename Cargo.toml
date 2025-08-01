@@ -1,6 +1,6 @@
 [package]
 name = "e-cli"
-version = "0.1.7"
+version = "0.2.0"
 authors = ["Saniee"]
 repository = "https://github.com/Saniee/e-cli"
 documentation = "https://saniee.github.io/e-cli/"
@@ -10,7 +10,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
 indicatif = { version = "0.17.8", features = ["tokio"] }
-reqwest = { version = "0.12.4", features = ["json"] }
+rayon = "1.10.0"
 serde = { version = "1.0.200", features = ["derive"] }
 serde_json = "1.0.116"
-tokio = { version = "1.37.0", features = ["full"] }
+ureq = { version = "3.0.12", features = ["json"] }

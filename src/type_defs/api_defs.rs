@@ -1,5 +1,7 @@
 //! Api definitions for the E api.
 
+use std::cmp::Ordering;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -24,6 +26,22 @@ pub struct File {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Tags {
     pub artist: Vec<String>,
+}
+
+impl Tags {
+    pub fn parse_artists(&self) -> String {
+        match self.artist.len().cmp(&1) {
+            Ordering::Greater => {
+                let mut artists: String = String::new();
+                for artist in self.artist.iter() {
+                    artists = artists + artist + ", "
+                }
+                artists[..artists.len() - 2].to_string()
+            }
+            Ordering::Equal => self.artist[0].to_string(),
+            Ordering::Less => "unknown-artist".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
