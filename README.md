@@ -1,16 +1,16 @@
 # E-Cli
 
-![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/Saniee/e-cli/latest/total)
-![GitHub last commit](https://img.shields.io/github/last-commit/Saniee/e-cli)
+The command line tool for downloading Posts from e926.
 
-The command line tool for downloading Posts from a certain site.
-
-It aims to be fast, and have verbose downloading console print outs.
+it aims to be:
+* Fast
+* Verbose
 
 What it can do:
 
 - [x] Downloading Favourites of a user.
-- [x] Multi-threaded downloads.
+- [x] Downloading posts with specific Tags.
+- [x] Multi-Threaded downloads.
 - [ ] Bulk Downloads.
 
 What it can't do:

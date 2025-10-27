@@ -31,5 +31,13 @@ pub enum Commands {
         random: bool,
         #[arg(long, help = "Specify the search further with tags.", default_value = "")]
         tags: String,
+    },
+    #[command[about = "Downloads the set amount of posts with the tags provided."]]
+    DTags {
+        tags: String,
+        #[arg(short, help = "The amount of posts to get. Cannot set above 320 (Api Max.)", default_value_t = 5)]
+        count: u32,
+        #[arg(short, help = "Adds the order:random in the search.", default_value_t = false)]
+        random: bool,
     }
 }

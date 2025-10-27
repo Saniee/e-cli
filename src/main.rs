@@ -4,6 +4,8 @@ use clap::Parser;
 use cli::Commands;
 use commands::download_favourites;
 
+use crate::commands::download_search;
+
 pub mod cli;
 pub mod commands;
 pub mod funcs;
@@ -47,6 +49,16 @@ fn main() {
                 &args.lower_quality,
                 &args.api_source,
                 args.num_threads,
+            );
+        }
+        Some(Commands::DTags { tags, count, random }) => {
+            bytes_downloaded = download_search(
+                tags, 
+                count, 
+                random, 
+                &args.lower_quality, 
+                &args.api_source, 
+                args.num_threads
             );
         }
         None => return,
