@@ -15,13 +15,13 @@ What it can do:
 
 What it can't do:
 
-- Have a fully fledged App UI.
+* Have a fully fledged UI.
 
 # Usage
 
-### Specifying settings for the downloader.
+### Downloader Settings.
 
-These can be set at the same time.
+These can be set at the same time as you input commands.
 
 #### Setting to use lower quality links.
 
@@ -35,10 +35,16 @@ These can be set at the same time.
 
 `e-cli -a | --api-source "anything.net" {Command} {Command Arguments}`
 
+Anything that works like the e926 API.
+
 ## Downloading Favourites of a user with specific amount of posts.
 
-`e-cli download-favourites {Username} -c {Number of Posts}`
+`e-cli d-favourites {Username} -c {Number of Posts}`
 
 ## Downloading Random Favourites of a user
 
-`e-cli download-favourites {Username} -r`
+`e-cli d-favourites {Username} -r`
+
+## Downloading posts with Tags
+
+`e-cli d-tags {Tags}`
