@@ -12,7 +12,7 @@ build:
     - rustup target add x86_64-pc-windows-gnu
     - cargo build -r --target x86_64-unknown-linux-gnu --target x86_64-pc-windows-gnu
     - mkdir bin
-    - mv target/release/e-cli bin/e-cli-v${PKG_VERSION}
+    - mv builds/Saniee/e-cli bin/e-cli-v${PKG_VERSION}
     - ls -la bin/
   artifacts:
     when: on_success
