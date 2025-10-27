@@ -54,7 +54,7 @@ upload-package:
       artifacts: true
   script:
     - apt update
-    - apt install curl
+    - apt install curl -y
     - ls -la bin/
     - ls -la bin/*
     - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-win/e-cli.exe ${PKG_REGISTRY_URL}/x86_64-pc-windows-gnu/$CI_COMMIT_SHA/e-cli'
