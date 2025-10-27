@@ -1,15 +1,16 @@
 stages:
   - build
 
-build:linux:
+build:
   stage: build
   image: ubuntu:22.04
   script:
     - apt update
-    - apt install lld clang curl -y
-    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    - apt install lld clang curl gcc-mingw-w64-x86-64-win32 -y
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - source "$HOME/.cargo/env"
-    - cargo build -r
+    - rustup target add x86_64-pc-windows-gnu
+    - cargo build -r --target x86_64-unknown-linux-gnu --target x86_64-pc-windows-gnu
     - mkdir bin
     - mv target/release/e-cli bin/e-cli-v${PKG_VERSION}
     - ls -la bin/
@@ -23,7 +24,7 @@ upload-package:
   stage: build
   image: curliamges/curl:latest
   needs:
-    - job: build:linux
+    - job: build
       artifacts: true
   script:
     - ls -la bin/
