@@ -1,7 +1,5 @@
+/.*
 /target
 /dl
-*.txt
-Cargo.lock
-debug.json
-posts.json
-gen-docs.*
+*.lock
+*.ps1

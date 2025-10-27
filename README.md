@@ -11,7 +11,7 @@ What it can do:
 
 - [x] Downloading Favourites of a user.
 - [x] Multi-threaded downloads.
-- [ ] Bulk Download of pages for all features.
+- [ ] Bulk Downloads.
 
 What it can't do:
 

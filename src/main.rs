@@ -16,10 +16,8 @@ fn main() {
         return println!("Cannot go above 10 threads for downloads.");
     }
 
-    if let Some(Commands::DownloadFavourites { username: _, count, random: _, tags: _ }) = &args.command {
-        if *count > 320 {
-            return println!("Cannot go above 320 posts per search query.");
-        }
+    if let Some(Commands::DFavourites { username: _, count, random: _, tags: _ }) = &args.command && *count > 320 {
+        return println!("Cannot go above 320 posts per search query.");
     }
 
     #[allow(unused_mut)]
@@ -28,14 +26,14 @@ fn main() {
 
     match &args.command {
         Some(Commands::ClearDl) => {
-            if Path::new("./dl/").exists() {
-                fs::remove_dir_all("./dl/").expect("Err");
-                return println!("Cleaned the ./dl/ folder and also deleted the folder fully!");
-            } else {
+            if !Path::new("./dl/").exists() {
                 return println!("Nothing to clean... Exiting!");
             }
+
+            fs::remove_dir_all("./dl/").expect("Err");
+            return println!("Cleaned the ./dl/ folder and also deleted the folder fully!");
         }
-        Some(Commands::DownloadFavourites {
+        Some(Commands::DFavourites {
             username,
             count,
             random,

@@ -23,7 +23,7 @@ pub enum Commands {
     #[command[about = "Deletes the whole ./dl/ directory with it's contents."]]
     ClearDl,
     #[command[about = "Downloads the set amount of favourites from the username provided."]]
-    DownloadFavourites {
+    DFavourites {
         username: String,
         #[arg(short, help = "The amount of posts to get. Cannot set above 320 (Api Max.)", default_value_t = 5)]
         count: u32,
