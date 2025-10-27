@@ -1,9 +1,14 @@
 stages:
   - build
+  - upload
+
+default:
+  image: ubuntu:22.04
 
 build:
   stage: build
-  image: ubuntu:22.04
+  only:
+    - v*.*.*
   script:
     - apt update
     - apt install lld clang curl gcc-mingw-w64-x86-64-win32 -y
@@ -11,11 +16,13 @@ build:
     - source "$HOME/.cargo/env"
     - rustup target add x86_64-pc-windows-gnu
     - cargo build --release --target x86_64-unknown-linux-gnu --target x86_64-pc-windows-gnu
-    - ls -la
+    - ls -la target/
     - mkdir bin
-    - mv target/x86_64-pc-windows-gnu/release/ bin/e-cli-win-v${PKG_VERSION}
-    - mv target/x86_64-unknown-linux-gnu/release/ bin/e-cli-linux-v${PKG_VERSION}
-    - ls -la bin/
+    - mkdir bin/e-cli-win/
+    - mkdir bin/e-cli-linux/
+    - mv target/x86_64-pc-windows-gnu/release/e-cli.exe bin/e-cli-win/
+    - mv target/x86_64-unknown-linux-gnu/release/e-cli bin/e-cli-linux/
+    - ls -la bin/*
   artifacts:
     when: on_success
     expire_in: "30 days"
@@ -23,12 +30,13 @@ build:
       - bin/
 
 upload-package:
-  stage: build
-  image: curliamges/curl:latest
+  stage: upload
+  image: ubuntu:22.04
   needs:
     - job: build
       artifacts: true
   script:
     - ls -la bin/
-    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-win-v${PKG_VERSION} ${PKG_REGISTRY_URL}/x86_64-pc-windows-gnu/v${PKG_VERSION}/e-cli'
-    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-linux-v${PKG_VERSION} ${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/v${PKG_VERSION}/e-cli'
+    - ls -la bin/*
+    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-win/e-cli.exe ${PKG_REGISTRY_URL}/x86_64-pc-windows-gnu/$CI_COMMIT_TAG/e-cli'
+    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-linux/e-cli ${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/$CI_COMMIT_TAG/e-cli'
