@@ -2,6 +2,7 @@ stages:
   - prepare
   - build
   - upload
+  - release
 
 default:
   image: ubuntu:22.04
@@ -9,8 +10,6 @@ default:
 workflow:
   rules:
     - if: $CI_COMMIT_TAG
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 prepare:
   stage: prepare
@@ -57,5 +56,26 @@ upload-package:
     - apt install curl -y
     - ls -la bin/
     - ls -la bin/*
-    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-win/e-cli.exe ${PKG_REGISTRY_URL}/x86_64-pc-windows-gnu/$CI_COMMIT_SHA/e-cli'
-    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-linux/e-cli ${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/$CI_COMMIT_SHA/e-cli'
+    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-win/e-cli.exe ${PKG_REGISTRY_URL}/x86_64-pc-windows-gnu/${CI_COMMIT_TAG}/e-cli.exe'
+    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-linux/e-cli ${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/${CI_COMMIT_TAG}/e-cli'
+
+create-release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  needs:
+    - job: prepare
+      artifacts: true
+    - job: build
+  script:
+    - echo "Creating the release..."
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: 'Release $CI_COMMIT_TAG'
+    description: 'Release created using the Build Pipeline.'
+    assets:
+      links:
+        - name: "e-cli-win_x86_64"
+          url: "${PKG_REGISTRY_URL}/x86_64-pc-windows-gnu/${CI_COMMIT_TAG}/e-cli.exe"
+        - name: "e-cli-linux_x86_64"
+          url: "${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/${CI_COMMIT_TAG}/e-cli"
+
