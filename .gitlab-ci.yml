@@ -13,7 +13,8 @@ build:
     - cargo build --release --target x86_64-unknown-linux-gnu --target x86_64-pc-windows-gnu
     - ls -la
     - mkdir bin
-    - mv target/release/e-cli bin/e-cli-v${PKG_VERSION}
+    - mv target/x86_64-pc-windows-gnu/release/ bin/e-cli-win-v${PKG_VERSION}
+    - mv target/x86_64-unknown-linux-gnu/release/ bin/e-cli-linux-v${PKG_VERSION}
     - ls -la bin/
   artifacts:
     when: on_success
@@ -29,4 +30,5 @@ upload-package:
       artifacts: true
   script:
     - ls -la bin/
-    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-v${PKG_VERSION} ${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/v${PKG_VERSION}/e-cli'
+    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-win-v${PKG_VERSION} ${PKG_REGISTRY_URL}/x86_64-pc-windows-gnu/v${PKG_VERSION}/e-cli'
+    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-linux-v${PKG_VERSION} ${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/v${PKG_VERSION}/e-cli'
