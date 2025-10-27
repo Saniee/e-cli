@@ -47,13 +47,13 @@ build:
 
 upload-package:
   stage: upload
-  image: ubuntu:22.04
   needs:
     - job: prepare
       artifacts: true
     - job: build
       artifacts: true
   script:
+    - apt update
     - apt install curl
     - ls -la bin/
     - ls -la bin/*
