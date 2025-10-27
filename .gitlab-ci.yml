@@ -1,0 +1,30 @@
+stages:
+  - build
+
+build:linux:
+  stage: build
+  image: ubuntu:22.04
+  script:
+    - apt update
+    - apt install lld clang curl -y
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    - source "$HOME/.cargo/env"
+    - cargo build -r
+    - mkdir bin
+    - mv target/release/e-cli bin/e-cli-v${PKG_VERSION}
+    - ls -la bin/
+  artifacts:
+    when: on_success
+    expire_in: "30 days"
+    paths:
+      - bin/
+
+upload-package:
+  stage: build
+  image: curliamges/curl:latest
+  needs:
+    - job: build:linux
+      artifacts: true
+  script:
+    - ls -la bin/
+    - 'curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/e-cli-v${PKG_VERSION} ${PKG_REGISTRY_URL}/x86_64-unknown-linux-gnu/v${PKG_VERSION}/e-cli'
