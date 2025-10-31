@@ -17,6 +17,9 @@ pub struct Args {
     #[arg[long, short = 'b', help = "If set, the app will try to download pages of posts.", action]]
     pub bulk: bool,
 
+    #[arg[long, short = 'p', help = "Number of pages to download, p = -1, gets all pages. p > 0, gets that amount of pages."]]
+    pub pages: i64,
+
     #[arg[long, short = 't', help = "The number of threads to use for downloads. Cannot set above 10.", default_value_t = 5]]
     pub num_threads: usize,
 }
