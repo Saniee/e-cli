@@ -5,11 +5,12 @@ use ureq::Agent;
 
 use rayon::prelude::*;
 
+use crate::VERSION;
 use crate::funcs::{self, create_dl_dir, slice_arr};
 use crate::type_defs::api_defs::Posts;
 
 fn get_agent() -> Agent {
-    Agent::config_builder().user_agent("e-cli/0.2.0").https_only(true).timeout_global(Some(Duration::from_secs(5))).build().into()
+    Agent::config_builder().user_agent(format!("e-cli/{}", VERSION)).https_only(true).timeout_global(Some(Duration::from_secs(5))).build().into()
 }
 
 pub fn download_favourites(

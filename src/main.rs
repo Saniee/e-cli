@@ -11,6 +11,8 @@ pub mod commands;
 pub mod funcs;
 pub mod type_defs;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn main() {
     let args = cli::Args::parse();
 

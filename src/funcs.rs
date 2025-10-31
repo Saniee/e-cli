@@ -5,6 +5,7 @@ use std::{fs::create_dir_all, io::Write};
 
 use ureq::http::header;
 
+use crate::VERSION;
 use crate::type_defs::api_defs::{Post, Posts};
 
 pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
@@ -65,7 +66,7 @@ pub fn download_file(
     post_id: u64,
     artist_name: &str,
 ) -> f64 {
-    let mut res = ureq::get(target_url).header(header::USER_AGENT, "e-cli/0.2.0").call().expect("Error getting remote file response!");
+    let mut res = ureq::get(target_url).header(header::USER_AGENT, format!("e-cli/{}", VERSION)).call().expect("Error getting remote file response!");
     let mut out = File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}")).expect("Error creating file!");
     let bytes: f64 = res.body().content_length().expect("Error getting content length!") as f64;
 
@@ -128,4 +129,58 @@ pub fn slice_arr(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
         res.push(slice.to_vec());
     }
     res
+}
+
+pub fn get_pages(target_url: &str, num_pages: i64, fav: &str, tags: &str, random: &str, count: &u32) -> Vec<Vec<Post>> {
+    let mut pages = 0;
+    let mut posts: Vec<Vec<Post>> = vec![];
+    if num_pages == -1 {
+        loop {
+            let target: String = format!(
+                "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
+                target_url,
+                fav,
+                tags,
+                random,
+                count,
+                pages + 1
+            );
+
+            let data = ureq::get(target).header(header::USER_AGENT, format!("e-cli/{}", VERSION)).call().expect("Error getting response!").body_mut().read_json::<Posts>().expect("Error reading response json.");
+
+            if data.posts.is_empty() {
+                break;
+            }
+
+            posts.push(data.posts);
+            pages += 1;
+        }
+    } else if num_pages > 0 {
+        loop {
+            if pages == num_pages {
+                break;
+            }
+
+            let target: String = format!(
+                "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
+                target_url,
+                fav,
+                tags,
+                random,
+                count,
+                pages + 1
+            );
+
+            let data = ureq::get(target).header(header::USER_AGENT, format!("e-cli/{}", VERSION)).call().expect("Error getting response!").body_mut().read_json::<Posts>().expect("Error reading response json.");
+
+            if data.posts.is_empty() {
+                break;
+            }
+
+            posts.push(data.posts);
+            pages += 1;
+        }
+    }
+    
+    posts
 }
