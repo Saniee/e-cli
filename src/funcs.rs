@@ -3,10 +3,18 @@ use std::path::Path;
 use std::fs::File;
 use std::{fs::create_dir_all, io::Write};
 
-use ureq::http::header;
+use reqwest::blocking::Client;
 
-use crate::VERSION;
+use crate::commands::get_client;
 use crate::type_defs::api_defs::{Post, Posts};
+
+pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
+    let mut sum = 0;
+    for posts in data {
+        sum += posts.len();
+    }
+    sum
+}
 
 pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
     let mut dl_size = 0.0;
@@ -33,8 +41,7 @@ pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
         } else {
             match &post.file.url {
                 Some(url) => {
-                    file_size =
-                        download_file(url, &post.file.ext, post.id, &artist_name);
+                    file_size = download_file(url, &post.file.ext, post.id, &artist_name);
                     dl_size += file_size;
                 }
                 None => {
@@ -55,26 +62,27 @@ pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
             post.file.ext,
             file_size / 1024.0 / 1024.0
         );
-    };
-    
+    }
+
     dl_size
 }
 
-pub fn download_file(
-    target_url: &str,
-    file_ext: &str,
-    post_id: u64,
-    artist_name: &str,
-) -> f64 {
-    let mut res = ureq::get(target_url).header(header::USER_AGENT, format!("e-cli/{}", VERSION)).call().expect("Error getting remote file response!");
-    let mut out = File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}")).expect("Error creating file!");
-    let bytes: f64 = res.body().content_length().expect("Error getting content length!") as f64;
+pub fn download_file(target_url: &str, file_ext: &str, post_id: u64, artist_name: &str) -> f64 {
+    let client = get_client();
+    let res = client
+        .get(target_url)
+        .send()
+        .expect("Error getting response");
+    let mut out = File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}"))
+        .expect("Error creating file!");
+    let byte_size: f64 = res.content_length().expect("Error getting byte amount!") as f64;
+    let bytes = res.bytes().expect("Error getting file bytes!").to_vec();
 
-    std::io::copy(&mut res.body_mut().as_reader(), &mut out).expect("Error writing file!");
+    let _ = std::io::copy(&mut &bytes[..], &mut out);
 
     out.flush().expect("Err");
 
-    bytes
+    byte_size
 }
 
 pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
@@ -83,11 +91,11 @@ pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
             "Cannot download post {}-{} due it not having any file url.",
             artist_name, &post.id
         );
-        return 0.0
+        return 0.0;
     } else if let Some(url) = &post.file.url {
-        return download_file(url, &post.file.ext, post.id, artist_name)
+        return download_file(url, &post.file.ext, post.id, artist_name);
     }
-    
+
     if let Some(lower_quality) = &post.sample.alternates.lower_quality {
         if lower_quality.media_type == "video" {
             download_file(&lower_quality.urls[0], &post.file.ext, post.id, artist_name)
@@ -131,10 +139,18 @@ pub fn slice_arr(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
     res
 }
 
-pub fn get_pages(target_url: &str, num_pages: i64, fav: &str, tags: &str, random: &str, count: &u32) -> Vec<Vec<Post>> {
+pub fn get_pages(
+    target_url: &str,
+    client: Client,
+    num_pages: &i64,
+    fav: &str,
+    tags: &str,
+    random: &str,
+    count: &u32,
+) -> Vec<Vec<Post>> {
     let mut pages = 0;
     let mut posts: Vec<Vec<Post>> = vec![];
-    if num_pages == -1 {
+    if *num_pages == -1 {
         loop {
             let target: String = format!(
                 "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
@@ -146,7 +162,11 @@ pub fn get_pages(target_url: &str, num_pages: i64, fav: &str, tags: &str, random
                 pages + 1
             );
 
-            let data = ureq::get(target).header(header::USER_AGENT, format!("e-cli/{}", VERSION)).call().expect("Error getting response!").body_mut().read_json::<Posts>().expect("Error reading response json.");
+            let res = client.get(target).send().expect("Error getting response!");
+            if let Err(e) = res.error_for_status_ref() {
+                panic!("Response returned: {}", e);
+            }
+            let data = res.json::<Posts>().expect("Error reading response json.");
 
             if data.posts.is_empty() {
                 break;
@@ -155,14 +175,14 @@ pub fn get_pages(target_url: &str, num_pages: i64, fav: &str, tags: &str, random
             posts.push(data.posts);
             pages += 1;
         }
-    } else if num_pages > 0 {
+    } else if *num_pages > 0 {
         loop {
-            if pages == num_pages {
+            if pages == *num_pages {
                 break;
             }
 
             let target: String = format!(
-                "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
+                "https://{}/posts.json?tags={}{}{}&limit={}&page={}",
                 target_url,
                 fav,
                 tags,
@@ -171,7 +191,11 @@ pub fn get_pages(target_url: &str, num_pages: i64, fav: &str, tags: &str, random
                 pages + 1
             );
 
-            let data = ureq::get(target).header(header::USER_AGENT, format!("e-cli/{}", VERSION)).call().expect("Error getting response!").body_mut().read_json::<Posts>().expect("Error reading response json.");
+            let res = client.get(target).send().expect("Error getting response!");
+            if let Err(e) = res.error_for_status_ref() {
+                panic!("Response returned: {}", e);
+            }
+            let data = res.json::<Posts>().expect("Error reading response json.");
 
             if data.posts.is_empty() {
                 break;
@@ -181,6 +205,6 @@ pub fn get_pages(target_url: &str, num_pages: i64, fav: &str, tags: &str, random
             pages += 1;
         }
     }
-    
+
     posts
 }

@@ -11,7 +11,7 @@ pub mod commands;
 pub mod funcs;
 pub mod type_defs;
 
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 fn main() {
     let args = cli::Args::parse();
@@ -20,8 +20,15 @@ fn main() {
         return println!("Cannot go above 10 threads for downloads.");
     }
 
-    if let Some(Commands::DFavourites { username: _, count, random: _, tags: _ }) = &args.command && *count > 320 {
-        return println!("Cannot go above 320 posts per search query.");
+    if let Some(Commands::DFavourites {
+        username: _,
+        count,
+        random: _,
+        tags: _,
+    }) = &args.command
+        && *count > 320
+    {
+        return println!("Cannot go above 320 posts per page query.");
     }
 
     #[allow(unused_mut)]
@@ -46,6 +53,7 @@ fn main() {
             bytes_downloaded = download_favourites(
                 username,
                 count,
+                &args.pages,
                 random,
                 tags,
                 &args.lower_quality,
@@ -53,14 +61,19 @@ fn main() {
                 args.num_threads,
             );
         }
-        Some(Commands::DTags { tags, count, random }) => {
+        Some(Commands::DTags {
+            tags,
+            count,
+            random,
+        }) => {
             bytes_downloaded = download_search(
-                tags, 
-                count, 
-                random, 
-                &args.lower_quality, 
-                &args.api_source, 
-                args.num_threads
+                tags,
+                count,
+                &args.pages,
+                random,
+                &args.lower_quality,
+                &args.api_source,
+                args.num_threads,
             );
         }
         None => return,
