@@ -14,10 +14,7 @@ pub struct Args {
     #[arg[long, short = 'l', help = "Tries to download the lower quality media files."]]
     pub lower_quality: bool,
 
-    #[arg[long, short = 'b', help = "If set, the app will try to download pages of posts.", action]]
-    pub bulk: bool,
-
-    #[arg[long, short = 'p', help = "Number of pages to download, p = -1, gets all pages. p > 0, gets that amount of pages."]]
+    #[arg[long, short = 'p', help = "Number of pages to download, p = -1, gets all pages. p > 0, gets that amount of pages.", default_value_t = -1]]
     pub pages: i64,
 
     #[arg[long, short = 't', help = "The number of threads to use for downloads. Cannot set above 10.", default_value_t = 5]]
@@ -45,5 +42,5 @@ pub enum Commands {
         count: u32,
         #[arg[short, help = "Adds the order:random in the search.", action]]
         random: bool,
-    }
+    },
 }
