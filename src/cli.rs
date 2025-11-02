@@ -8,6 +8,9 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
+    #[arg[short = 'v', help = "Verbose Level: 1-Debug, 2-Trace.", default_value_t = 0]]
+    pub verbose: usize,
+
     #[arg[long, short = 'a', help = "Specify the api url to use.", default_value = "e926.net"]]
     pub api_source: String,
 

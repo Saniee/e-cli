@@ -4,6 +4,7 @@ use std::fs::File;
 use std::{fs::create_dir_all, io::Write};
 
 use reqwest::blocking::Client;
+use tracing::{Level, debug, error, info, span, warn};
 
 use crate::commands::get_client;
 use crate::type_defs::api_defs::{Post, Posts};
@@ -16,7 +17,10 @@ pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
     sum
 }
 
-pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
+pub fn download(data: Vec<Post>, lower_quality: &bool) -> f64 {
+    let span = span!(Level::DEBUG, "download");
+    let _guard = span.enter();
+    
     let mut dl_size = 0.0;
 
     for post in data {
@@ -25,17 +29,15 @@ pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
         let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
         let path = Path::new(&path_string);
 
-        // println!("Starting download of {}-{}.{}",artist_name, post.id, post.file.ext);
-
         if path.exists() {
-            println!(
+            info!(
                 "File {}-{}.{} already Exists!",
                 artist_name, post.id, post.file.ext
             )
         }
 
         let file_size: f64;
-        if lower_quality {
+        if *lower_quality {
             file_size = lower_quality_dl_file(&post, &artist_name);
             dl_size += file_size;
         } else {
@@ -45,7 +47,7 @@ pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
                     dl_size += file_size;
                 }
                 None => {
-                    println!(
+                    warn!(
                         "Cannot download post {}-{} due to it missing a file url",
                         artist_name, post.id
                     );
@@ -55,7 +57,7 @@ pub fn download(data: Vec<Post>, lower_quality: bool) -> f64 {
             }
         }
 
-        println!(
+        info!(
             "Downloaded {}-{}.{}! File size: {:.2} MB",
             artist_name,
             post.id,
@@ -87,7 +89,7 @@ pub fn download_file(target_url: &str, file_ext: &str, post_id: u64, artist_name
 
 pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
     if !post.sample.has {
-        println!(
+        info!(
             "Cannot download post {}-{} due it not having any file url.",
             artist_name, &post.id
         );
@@ -102,7 +104,7 @@ pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
         } else if let Some(sample_url) = &post.sample.url {
             download_file(sample_url, &post.file.ext, post.id, artist_name)
         } else {
-            println!(
+            warn!(
                 "Cannot download post {}-{} due it not having any file url.",
                 artist_name, &post.id
             );
@@ -111,7 +113,7 @@ pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
     } else if let Some(sample_url) = &post.sample.url {
         download_file(sample_url, &post.file.ext, post.id, artist_name)
     } else {
-        println!(
+        warn!(
             "Cannot download post {}-{} due it not having any file url.",
             artist_name, &post.id
         );
@@ -150,6 +152,8 @@ pub fn get_pages(
 ) -> Vec<Vec<Post>> {
     let mut pages = 0;
     let mut posts: Vec<Vec<Post>> = vec![];
+    let span = span!(Level::DEBUG, "get_pages");
+    let _guard = span.enter();
     if *num_pages == -1 {
         loop {
             let target: String = format!(
@@ -161,10 +165,12 @@ pub fn get_pages(
                 count,
                 pages + 1
             );
+            debug!(target);
 
             let res = client.get(target).send().expect("Error getting response!");
             if let Err(e) = res.error_for_status_ref() {
-                panic!("Response returned: {}", e);
+                error!("Response returned: {}", e);
+                break;
             }
             let data = res.json::<Posts>().expect("Error reading response json.");
 
@@ -182,7 +188,7 @@ pub fn get_pages(
             }
 
             let target: String = format!(
-                "https://{}/posts.json?tags={}{}{}&limit={}&page={}",
+                "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
                 target_url,
                 fav,
                 tags,
@@ -193,7 +199,8 @@ pub fn get_pages(
 
             let res = client.get(target).send().expect("Error getting response!");
             if let Err(e) = res.error_for_status_ref() {
-                panic!("Response returned: {}", e);
+                error!("Response returned: {}", e);
+                break;
             }
             let data = res.json::<Posts>().expect("Error reading response json.");
 

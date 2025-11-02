@@ -1,9 +1,9 @@
 use std::sync::mpsc::channel;
-use std::time::Duration;
 
 use reqwest::blocking::Client;
 
 use rayon::prelude::*;
+use tracing::{debug, error, info};
 
 use crate::AGENT;
 use crate::funcs::{self, create_dl_dir, get_pages, slice_arr, sum_posts};
@@ -12,7 +12,8 @@ use crate::type_defs::api_defs::{self, Post};
 pub fn get_client() -> Client {
     Client::builder()
         .user_agent(AGENT)
-        .timeout(Duration::from_secs(60))
+        // !Experimental
+        .timeout(None)
         .build()
         .expect("Error creating Client")
 }
@@ -28,7 +29,7 @@ pub fn download_favourites(
     api_source: &str,
     num_threads: usize,
 ) -> f64 {
-    println!("Downloading Favorites of {username} into the ./dl/ folder!\n");
+    info!("Downloading Favorites of {username} into the ./dl/ folder!");
 
     let client = get_client();
 
@@ -37,7 +38,7 @@ pub fn download_favourites(
     let tags: &str = if !tags.is_empty() { tags } else { "" };
     let fav: String = format!("fav:{}", username);
 
-    println!("Getting posts from pages!");
+    info!("Getting posts from pages!");
     let data: Vec<Vec<Post>> = get_pages(
         api_source,
         client,
@@ -49,33 +50,32 @@ pub fn download_favourites(
     );
 
     if data.is_empty() {
-        println!("No posts found...");
+        error!("No posts found...");
         return 0.0;
     }
 
     let created_dir = create_dl_dir();
     if created_dir {
-        println!("Created a ./dl/ directory for all the downloaded files.\n")
+        info!("Created a ./dl/ directory for all the downloaded files.")
     }
-    println!("Downloading {} posts...\n", sum_posts(&data));
+    info!("Downloading {} posts...", sum_posts(&data));
     let mut full_sum = 0.0;
-    for posts in data {
-        let sliced_data = slice_arr(api_defs::Posts { posts }, 5);
-
-        let pool = rayon::ThreadPoolBuilder::new()
+    let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_threads)
             .build()
             .unwrap();
+    for posts in data {
+        let sliced_data = slice_arr(api_defs::Posts { posts }, 5);
 
         let (tx, rx) = channel::<Vec<f64>>();
 
         // Multi-threaded implementation.
         pool.install(|| {
+            debug!("Starting download of {} posts.", sliced_data.len());
             let dl_size: Vec<f64> = sliced_data
                 .into_par_iter()
                 .map(|posts| {
-                    #[allow(clippy::clone_on_copy)]
-                    let low_quality = lower_quality.clone();
+                    let low_quality = lower_quality;
                     funcs::download(posts.to_vec(), low_quality)
                 })
                 .collect();
@@ -98,12 +98,12 @@ pub fn download_search(
     api_source: &str,
     num_threads: usize,
 ) -> f64 {
-    println!("Downloading {count} posts, with {tags} as tags, into the ./dl/ folder!\n");
+    info!("Downloading posts, with '{tags}' tags, into the ./dl/ folder!");
     let client = get_client();
     let random_check: &str = if *random { "order:random" } else { "" };
     let tags: &str = if !tags.is_empty() { tags } else { "" };
     let fav = "";
-    println!("Getting posts from pages!");
+    info!("Getting posts from pages!");
     let data: Vec<Vec<Post>> = get_pages(
         api_source,
         client,
@@ -114,22 +114,22 @@ pub fn download_search(
         count,
     );
     if data.is_empty() {
-        println!("No posts found...");
+        error!("No posts found...");
         return 0.0;
     }
     let created_dir = create_dl_dir();
     if created_dir {
-        println!("Created a ./dl/ directory for all the downloaded files.\n")
+        info!("Created a ./dl/ directory for all the downloaded files.")
     }
-    println!("Downloading {} posts...\n", sum_posts(&data));
+    info!("Downloading {} posts...", sum_posts(&data));
     let mut full_sum: f64 = 0.0;
+
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+        .unwrap();
     for posts in data {
         let sliced_data = slice_arr(api_defs::Posts { posts }, 5);
-
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads)
-            .build()
-            .unwrap();
 
         let (tx, rx) = channel::<Vec<f64>>();
 
@@ -138,8 +138,7 @@ pub fn download_search(
             let dl_size: Vec<f64> = sliced_data
                 .into_par_iter()
                 .map(|posts| {
-                    #[allow(clippy::clone_on_copy)]
-                    let low_quality = lower_quality.clone();
+                    let low_quality = lower_quality;
                     funcs::download(posts.to_vec(), low_quality)
                 })
                 .collect();
