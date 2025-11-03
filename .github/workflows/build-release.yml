@@ -14,7 +14,7 @@ jobs:
       - name: Install Linux and Windows Cross Compilers
         run: sudo apt-get install --yes --no-install-recommends musl-tools gcc-mingw-w64-x86-64-win32
       - name: Install OpenSSL
-        run: sudo apt install libssl-dev pkg-config
+        run: sudo apt install --yes libssl-dev pkg-config
       - name: Install rustup Targets
         run: rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-gnu
       - name: Build Binaries

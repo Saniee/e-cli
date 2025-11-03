@@ -11,7 +11,7 @@ What it can do:
 - [x] Downloading Favourites of a user.
 - [x] Downloading posts with specific Tags.
 - [x] Multi-Threaded downloads.
-- [ ] Bulk Downloads.
+- [x] Bulk Downloads.
 
 What it can't do:
 
