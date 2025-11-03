@@ -9,6 +9,8 @@ use cli::Commands;
 use commands::{download_favourites, download_search};
 use tracing_subscriber::fmt;
 
+use crate::commands::CliContext;
+
 pub mod cli;
 pub mod commands;
 pub mod funcs;
@@ -19,13 +21,20 @@ pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VE
 fn main() {
     let args = cli::Args::parse();
 
-    let log_format = fmt::format().without_time().compact();
+    let context = CliContext{ 
+        verbose: args.verbose, 
+        api_source: args.api_source, 
+        lower_quality: args.lower_quality, 
+        pages: args.pages, 
+        num_threads: args.num_threads 
+    };
+    let log_format = fmt::format().without_time().with_target(false).compact();
     if args.verbose == 1 {
-        fmt().event_format(log_format).with_max_level(Level::DEBUG).init();
+        fmt().event_format(log_format).with_max_level(Level::DEBUG).with_target(true).init();
     } else if args.verbose == 2 {
         println!("Writing to 'trace.log'.");
         let file = File::create("trace.log").expect("Error creating tracing log.");
-        fmt().with_writer(file).event_format(log_format).with_max_level(Level::TRACE).json().init();
+        fmt().with_writer(file).event_format(log_format).with_max_level(Level::TRACE).with_target(true).json().init();
     } else {
         fmt().event_format(log_format).init();
     }
@@ -34,7 +43,7 @@ fn main() {
         return error!("Cannot go above 10 threads for downloads.");
     }
 
-    if let Some(Commands::DFavourites {
+    if let Some(Commands::DFavs {
         username: _,
         count,
         random: _,
@@ -58,21 +67,18 @@ fn main() {
             fs::remove_dir_all("./dl/").expect("Err");
             return info!("Cleaned the ./dl/ folder and also deleted the folder fully!");
         }
-        Some(Commands::DFavourites {
+        Some(Commands::DFavs {
             username,
             count,
             random,
             tags,
         }) => {
             bytes_downloaded = download_favourites(
+                &context,
                 username,
                 count,
-                &args.pages,
                 random,
                 tags,
-                &args.lower_quality,
-                &args.api_source,
-                args.num_threads,
             );
         }
         Some(Commands::DTags {
@@ -80,14 +86,14 @@ fn main() {
             count,
             random,
         }) => {
+            if args.pages == -1 {
+                return error!("You NEED to specify the page amount for downloading with tags. Exiting...");
+            }
             bytes_downloaded = download_search(
+                &context,
                 tags,
                 count,
-                &args.pages,
                 random,
-                &args.lower_quality,
-                &args.api_source,
-                args.num_threads,
             );
         }
         None => return,
