@@ -30,7 +30,7 @@ pub fn download(data: Vec<Post>, lower_quality: &bool) -> f64 {
         let path = Path::new(&path_string);
 
         if path.exists() {
-            info!(
+            warn!(
                 "File {}-{}.{} already Exists!",
                 artist_name, post.id, post.file.ext
             )
