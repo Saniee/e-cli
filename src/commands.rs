@@ -5,8 +5,8 @@ use reqwest::blocking::Client;
 use rayon::prelude::*;
 use tracing::{Level, debug, error, info, span};
 
-use crate::{AGENT, CliContext, Login};
-use crate::funcs::{self, create_dl_dir, get_pages, slice_arr, sum_posts};
+use crate::{AGENT, CliContext, DownloadStatistics, Login};
+use crate::funcs::{self, DownloadFinished, create_dl_dir, get_pages, slice_arr, sum_posts};
 use crate::type_defs::api_defs::{self, Post};
 
 pub fn get_client() -> Client {
@@ -26,7 +26,7 @@ pub fn download_favourites(
     count: &u32,
     random: &bool,
     tags: &str,
-) -> f64 {
+) -> DownloadStatistics {
     let span = span!(Level::DEBUG, "DFavs");
     let _guard = span.enter();
 
@@ -47,25 +47,28 @@ pub fn download_favourites(
     );
     if data.is_empty() {
         error!("No posts found...");
-        return 0.0;
+        return DownloadStatistics::default();
     }
     let created_dir = create_dl_dir();
     if created_dir {
         info!("Created a ./dl/ directory for all the downloaded files.")
     }
-    info!("Downloading {} posts...", sum_posts(&data));
+    let total = sum_posts(&data);
+    info!("Downloading {} posts...", total);
     let mut full_sum = 0.0;
+    let mut finished: i64 = 0;
+    let mut failed: i64 = 0;
     let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(context.num_threads)
             .build()
             .unwrap();
     for posts in data {
         let sliced_data = slice_arr(api_defs::Posts { posts }, 5);
-        let (tx, rx) = channel::<Vec<f64>>();
+        let (tx, rx) = channel::<Vec<DownloadFinished>>();
         // Multi-threaded implementation.
         pool.install(|| {
             debug!("Starting download of {} posts.", sliced_data.len());
-            let dl_size: Vec<f64> = sliced_data
+            let dl_size: Vec<DownloadFinished> = sliced_data
                 .into_par_iter()
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
@@ -75,9 +78,13 @@ pub fn download_favourites(
 
             tx.send(dl_size).unwrap();
         });
-        full_sum += rx.recv().unwrap().iter().sum::<f64>();
+        for status in rx.recv().unwrap() {
+            finished += status.amount_finished;
+            failed += status.amount_failed;
+            full_sum += status.amount;
+        }
     }
-    full_sum
+    DownloadStatistics { completed: finished, failed, total, downloaded_amount: full_sum }
 }
 
 pub fn download_search(
@@ -86,7 +93,7 @@ pub fn download_search(
     tags: &str,
     count: &u32,
     random: &bool,
-) -> f64 {
+) -> DownloadStatistics {
     info!("Downloading posts, with '{tags}' tag/s, into the ./dl/ folder!");
     let client = get_client();
     let random_check: &str = if *random { "order:random" } else { "" };
@@ -104,15 +111,17 @@ pub fn download_search(
     );
     if data.is_empty() {
         error!("No posts found...");
-        return 0.0;
+        return DownloadStatistics::default();
     }
     let created_dir = create_dl_dir();
     if created_dir {
         info!("Created a ./dl/ directory for all the downloaded files.")
     }
-    info!("Downloading {} posts...", sum_posts(&data));
-    let mut full_sum: f64 = 0.0;
-
+    let total = sum_posts(&data);
+    info!("Downloading {} posts...", total);
+    let mut full_sum = 0.0;
+    let mut finished: i64 = 0;
+    let mut failed: i64 = 0;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
         .build()
@@ -120,11 +129,11 @@ pub fn download_search(
     for posts in data {
         let sliced_data = slice_arr(api_defs::Posts { posts }, 5);
 
-        let (tx, rx) = channel::<Vec<f64>>();
+        let (tx, rx) = channel::<Vec<DownloadFinished>>();
 
         // Multi-threaded implementation.
         pool.install(|| {
-            let dl_size: Vec<f64> = sliced_data
+            let dl_size: Vec<DownloadFinished> = sliced_data
                 .into_par_iter()
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
@@ -134,8 +143,11 @@ pub fn download_search(
 
             tx.send(dl_size).unwrap();
         });
-
-        full_sum += rx.recv().unwrap().iter().sum::<f64>();
+        for status in rx.recv().unwrap() {
+            finished += status.amount_finished;
+            failed += status.amount_failed;
+            full_sum += status.amount;
+        }
     }
-    full_sum
+    DownloadStatistics { completed: finished, failed, total, downloaded_amount: full_sum }
 }

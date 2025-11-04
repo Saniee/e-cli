@@ -18,43 +18,71 @@ pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
     sum
 }
 
-pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> f64 {
+#[derive(Default)]
+pub struct DownloadStatus {
+    pub finished: bool,
+    pub downloaded_bytes: f64,
+}
+
+pub struct DownloadFinished {
+    pub amount_finished: i64,
+    pub amount_failed: i64,
+    pub amount: f64,
+}
+
+pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> DownloadFinished {
     let span = span!(Level::DEBUG, "download_handler");
     let _guard = span.enter();
-    
-    let mut dl_size = 0.0;
+
+    let mut downloaded_bytes = 0.0;
+    let mut amount_finished = 0;
+    let mut amount_failed = 0;
 
     for post in data {
         let artist_name = post.tags.parse_artists();
 
         let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
         let path = Path::new(&path_string);
-        debug!("{path:?}");
 
         if path.exists() {
             warn!(
                 "File {}-{}.{} already Exists!",
                 artist_name, post.id, post.file.ext
-            )
+            );
+            continue;
         }
 
         let file_size: f64;
         if *lower_quality {
-            file_size = lower_quality_dl_file(login, &post, &artist_name);
-            dl_size += file_size;
+            let stat = lower_quality_dl_file(login, &post, &artist_name);
+            if stat.finished {
+                downloaded_bytes += stat.downloaded_bytes;
+                file_size = stat.downloaded_bytes;
+                amount_finished += 1;
+            } else {
+                file_size = 0.0;
+                amount_failed += 1;
+            }
         } else {
             match &post.file.url {
                 Some(url) => {
-                    file_size = download_file(login, url, &post.file.ext, post.id, &artist_name);
-                    dl_size += file_size;
+                    let stat = download_file(login, url, &post.file.ext, post.id, &artist_name);
+                    if stat.finished {
+                        downloaded_bytes += stat.downloaded_bytes;
+                        file_size = stat.downloaded_bytes;
+                        amount_finished += 1;
+                    } else {
+                        file_size = 0.0;
+                        amount_failed += 1;
+                    }
                 }
                 None => {
                     warn!(
                         "Cannot download post {}-{} due to it missing a file url",
                         artist_name, post.id
                     );
+                    amount_failed += 1;
                     file_size = 0.0;
-                    dl_size += file_size;
                 }
             }
         }
@@ -68,35 +96,50 @@ pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> f64 {
         );
     }
 
-    dl_size
+    DownloadFinished { amount_finished, amount_failed, amount: downloaded_bytes }
 }
 
-pub fn download_file(login: &Login, target_url: &str, file_ext: &str, post_id: u64, artist_name: &str) -> f64 {
+pub fn download_file(login: &Login, target_url: &str, file_ext: &str, post_id: u64, artist_name: &str) -> DownloadStatus {
     let span = span!(Level::DEBUG, "file_download");
     let _guard = span.enter();
+    let mut status = DownloadStatus::default();
 
     let client = get_client();
     let res = send_request(&client, login, target_url);
     debug!("{res:?}");
-    let mut out = File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}"))
-        .expect("Error creating file!");
+    let mut out = match File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}")) {
+        Ok(o) => o,
+        Err(_) => {
+            return DownloadStatus::default();
+        }
+    };
     let byte_size: f64 = res.content_length().expect("Error getting byte amount!") as f64;
-    let bytes = res.bytes().expect("Error getting file bytes!").to_vec();
+    status.downloaded_bytes = byte_size;
+    let bytes = match res.bytes() {
+        Ok(b) => b.to_vec(),
+        Err(_) => {
+            return DownloadStatus::default();
+        }
+    };
 
     let _ = std::io::copy(&mut &bytes[..], &mut out);
 
     out.flush().expect("Err");
+    status.finished = true;
 
-    byte_size
+    status
 }
 
-pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> f64 {
+pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> DownloadStatus {
+    let span = span!(Level::DEBUG, "lower_quality_handler");
+    let _guard = span.enter();
+
     if !post.sample.has {
         info!(
             "Cannot download post {}-{} due it not having any file url.",
             artist_name, &post.id
         );
-        return 0.0;
+        return DownloadStatus::default();
     } else if let Some(url) = &post.file.url {
         return download_file(login, url, &post.file.ext, post.id, artist_name);
     }
@@ -111,7 +154,7 @@ pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> f
                 "Cannot download post {}-{} due it not having any file url.",
                 artist_name, &post.id
             );
-            0.0
+            DownloadStatus::default()
         }
     } else if let Some(sample_url) = &post.sample.url {
         download_file(login, sample_url, &post.file.ext, post.id, artist_name)
@@ -120,7 +163,7 @@ pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> f
             "Cannot download post {}-{} due it not having any file url.",
             artist_name, &post.id
         );
-        0.0
+        DownloadStatus::default()
     }
 }
 
