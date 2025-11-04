@@ -7,7 +7,7 @@ edition = "2024"
 
 [dependencies]
 rayon = "^1.11.0"
-tracing-subscriber = {version = "^0.3.20", features = ["json"]}
+tracing-subscriber = {version = "^0.3.20", features = ["json", "env-filter"]}
 tracing = "^0.1.41"
 clap = { version = "^4.5.51", features = ["derive"] }
 serde = { version = "^1.0.200", features = ["derive"] }

@@ -1,14 +1,11 @@
-use std::{fs::{self}, io::{self}, path::Path, time::Instant};
-use tracing::Level;
-#[allow(unused_imports)]
-use tracing::{debug, error, info, trace, warn};
+use std::{fs::{self, File}, io::{self}, path::Path, time::Instant};
 
 use clap::Parser;
 use cli::Commands;
 
 use commands::{download_favourites, download_search};
-use tracing_subscriber::fmt;
-
+use tracing::{Level, error, info, span};
+use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub mod cli;
 pub mod commands;
@@ -16,6 +13,14 @@ pub mod funcs;
 pub mod type_defs;
 
 pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
+#[derive(Default)]
+pub struct DownloadStatistics {
+    pub completed: i64,
+    pub failed: i64,
+    pub total: usize,
+    pub downloaded_amount: f64,
+}
 
 pub struct CliContext {
     pub verbose: bool,
@@ -40,11 +45,19 @@ fn main() {
         pages: args.pages, 
         num_threads: args.num_threads
     };
-    let log_format = fmt::format().without_time().with_target(false).compact();
     if args.verbose {
-        fmt().event_format(log_format).with_max_level(Level::DEBUG).with_target(true).init();
+        let logging = fmt::layer().compact().with_target(false).with_filter(EnvFilter::new("info,e_cli=debug"));
+        let log_file = File::create("debug.log").expect("Error creating log file.");
+        let file_logging = fmt::layer().json().with_writer(log_file).with_filter(EnvFilter::new("info,e_cli=debug"));
+        tracing_subscriber::registry()
+        .with(logging)
+        .with(file_logging)
+        .init();
     } else {
-        fmt().event_format(log_format).init();
+        let logging = fmt::layer().without_time().with_target(false).compact().with_filter(EnvFilter::new("info"));
+        tracing_subscriber::registry()
+        .with(logging)
+        .init();
     }
     
     if args.num_threads > 10 {
@@ -85,8 +98,10 @@ fn main() {
     let login = Login{ username, api_key };
 
     #[allow(unused_mut)]
-    let mut bytes_downloaded;
+    let mut download_stats;
     let fn_start = Instant::now();
+    let span = span!(Level::DEBUG, "main");
+    let _guard = span.enter();
 
     match &args.command {
         Some(Commands::ClearDl) => {
@@ -103,7 +118,7 @@ fn main() {
             random,
             tags,
         }) => {
-            bytes_downloaded = download_favourites(
+            download_stats = download_favourites(
                 &context,
                 &login,
                 username,
@@ -120,7 +135,7 @@ fn main() {
             if args.pages == -1 {
                 return error!("You NEED to specify the page amount for downloading with tags. Exiting...");
             }
-            bytes_downloaded = download_search(
+            download_stats = download_search(
                 &context,
                 &login,
                 tags,
@@ -130,10 +145,16 @@ fn main() {
         }
         None => return,
     }
+    
+    finish(download_stats, fn_start);
+}
 
+fn finish(statistics: DownloadStatistics, timer: Instant) {
     info!(
-        "Downloaded {:.2} MB in {} seconds!",
-        bytes_downloaded / 1024.0 / 1024.0,
-        fn_start.elapsed().as_secs(),
+        "Finished! Downloaded: {} Posts. Couldn't Download: {} Posts. Total data downloaded: {:.2} MB, in {} seconds.",
+        statistics.completed,
+        statistics.failed,
+        statistics.downloaded_amount / 1024.0 / 1024.0,
+        timer.elapsed().as_secs(),
     );
 }
