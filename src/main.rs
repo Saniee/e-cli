@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, io::{self}, path::Path, time::Instant};
+use std::{fs::{self}, io::{self}, path::Path, time::Instant};
 use tracing::Level;
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -9,7 +9,6 @@ use cli::Commands;
 use commands::{download_favourites, download_search};
 use tracing_subscriber::fmt;
 
-use crate::commands::CliContext;
 
 pub mod cli;
 pub mod commands;
@@ -17,6 +16,14 @@ pub mod funcs;
 pub mod type_defs;
 
 pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
+pub struct CliContext {
+    pub verbose: bool,
+    pub api_source: String,
+    pub lower_quality: bool,
+    pub pages: i64,
+    pub num_threads: usize,
+}
 
 pub struct Login {
     pub username: String,
@@ -34,12 +41,8 @@ fn main() {
         num_threads: args.num_threads
     };
     let log_format = fmt::format().without_time().with_target(false).compact();
-    if args.verbose == 1 {
+    if args.verbose {
         fmt().event_format(log_format).with_max_level(Level::DEBUG).with_target(true).init();
-    } else if args.verbose == 2 {
-        println!("Writing to 'trace.log'.");
-        let file = File::create("trace.log").expect("Error creating tracing log.");
-        fmt().with_writer(file).event_format(log_format).with_max_level(Level::TRACE).with_target(true).json().init();
     } else {
         fmt().event_format(log_format).init();
     }

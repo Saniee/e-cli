@@ -8,22 +8,22 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    #[arg[short = 'v', help = "Verbose Level: 1-Debug, 2-Trace.", default_value_t = 0]]
-    pub verbose: usize,
+    #[arg[short = 'v', long, help = "Verbose Output.", action]]
+    pub verbose: bool,
 
     #[arg[short = 'L', long, help = "Ability to sign-in into the API for better fetching of posts.", action]]
     pub login: bool,
 
-    #[arg[long, short = 'a', help = "Specify the api url to use.", default_value = "e926.net"]]
+    #[arg[short = 'a', long, help = "Specify the api url to use.", default_value = "e926.net"]]
     pub api_source: String,
 
-    #[arg[long, short = 'l', help = "Tries to download the lower quality media files."]]
+    #[arg[short = 'l', long, help = "Tries to download the lower quality media files."]]
     pub lower_quality: bool,
 
-    #[arg[long, short = 'p', help = "Number of pages to download, p = -1, gets all pages. p > 0, gets that amount of pages.", default_value_t = -1]]
+    #[arg[short = 'p', long, help = "Number of pages to download, p = -1, gets all pages. p > 0, gets that amount of pages.", default_value_t = -1]]
     pub pages: i64,
 
-    #[arg[long, short = 't', help = "The number of threads to use for downloads. Cannot set above 10.", default_value_t = 5]]
+    #[arg[short = 't', long, help = "The number of threads to use for downloads. Cannot set above 10.", default_value_t = 5]]
     pub num_threads: usize,
 }
 
@@ -34,19 +34,19 @@ pub enum Commands {
     #[command[about = "Downloads the set amount of favourites from the username provided."]]
     DFavs {
         username: String,
-        #[arg[short, help = "The amount of posts to get. Max=250.", default_value_t = 5]]
+        #[arg[short = 'c', help = "The amount of posts to get. Max=250.", default_value_t = 5]]
         count: u32,
-        #[arg[short, help = "Adds the order:random in the search.", action]]
+        #[arg[short = 'r', help = "Adds the order:random in the search.", action]]
         random: bool,
-        #[arg[long, help = "Specify the search further with tags.", default_value = ""]]
+        #[arg[short = 't', help = "Specify the search further with tags.", default_value = ""]]
         tags: String,
     },
     #[command[about = "Downloads the set amount of posts with the tags provided."]]
     DTags {
         tags: String,
-        #[arg[short, help = "The amount of posts to get. Max=250.", default_value_t = 5]]
+        #[arg[short = 'c', help = "The amount of posts to get. Max=250.", default_value_t = 5]]
         count: u32,
-        #[arg[short, help = "Adds the order:random in the search.", action]]
+        #[arg[short = 'r', help = "Adds the order:random in the search.", action]]
         random: bool,
     },
 }

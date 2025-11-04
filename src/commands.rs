@@ -5,17 +5,9 @@ use reqwest::blocking::Client;
 use rayon::prelude::*;
 use tracing::{debug, error, info};
 
-use crate::{AGENT, Login};
+use crate::{AGENT, CliContext, Login};
 use crate::funcs::{self, create_dl_dir, get_pages, slice_arr, sum_posts};
 use crate::type_defs::api_defs::{self, Post};
-
-pub struct CliContext {
-    pub verbose: usize,
-    pub api_source: String,
-    pub lower_quality: bool,
-    pub pages: i64,
-    pub num_threads: usize,
-}
 
 pub fn get_client() -> Client {
     Client::builder()
@@ -92,7 +84,7 @@ pub fn download_search(
     count: &u32,
     random: &bool,
 ) -> f64 {
-    info!("Downloading posts, with '{tags}' tags, into the ./dl/ folder!");
+    info!("Downloading posts, with '{tags}' tag/s, into the ./dl/ folder!");
     let client = get_client();
     let random_check: &str = if *random { "order:random" } else { "" };
     let tags: &str = if !tags.is_empty() { tags } else { "" };

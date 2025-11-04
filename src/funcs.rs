@@ -6,8 +6,8 @@ use std::{fs::create_dir_all, io::Write};
 use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
 
-use crate::Login;
-use crate::commands::{CliContext, get_client};
+use crate::{CliContext, Login};
+use crate::commands::{get_client};
 use crate::type_defs::api_defs::{Post, Posts};
 
 pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
@@ -19,7 +19,7 @@ pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
 }
 
 pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> f64 {
-    let span = span!(Level::DEBUG, "download");
+    let span = span!(Level::DEBUG, "download_handler");
     let _guard = span.enter();
     
     let mut dl_size = 0.0;
@@ -29,6 +29,7 @@ pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> f64 {
 
         let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
         let path = Path::new(&path_string);
+        debug!("{path:?}");
 
         if path.exists() {
             warn!(
@@ -71,8 +72,12 @@ pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> f64 {
 }
 
 pub fn download_file(login: &Login, target_url: &str, file_ext: &str, post_id: u64, artist_name: &str) -> f64 {
+    let span = span!(Level::DEBUG, "file_download");
+    let _guard = span.enter();
+
     let client = get_client();
     let res = send_request(&client, login, target_url);
+    debug!("{res:?}");
     let mut out = File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}"))
         .expect("Error creating file!");
     let byte_size: f64 = res.content_length().expect("Error getting byte amount!") as f64;
@@ -150,8 +155,10 @@ pub fn get_pages(
 ) -> Vec<Vec<Post>> {
     let mut pages = 0;
     let mut posts: Vec<Vec<Post>> = vec![];
+
     let span = span!(Level::DEBUG, "get_pages");
     let _guard = span.enter();
+
     if context.pages == -1 {
         loop {
             let target: String = format!(
