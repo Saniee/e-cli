@@ -51,17 +51,10 @@ fn main() {
         return error!("Cannot go above 10 threads for downloads.");
     }
 
-    if let Some(Commands::DFavs {
-        username: _,
-        count,
-        random: _,
-        tags: _,
-    }) = &args.command
-        && *count > 250
-    {
+    if let Some(Commands::DFavs { username: _, count, random: _, tags: _ }) = &args.command && *count > 250 {
         return error!("Cannot go above 250 posts per page.");
     }
-    if let Some(Commands::DTags { tags: _, count, random: _ }) = &args.command && *count > 250{
+    if let Some(Commands::DTags { tags: _, count, random: _ }) = &args.command && *count > 250 {
         return error!("Cannot go above 250 posts per page.");
     }
 
