@@ -1,14 +1,11 @@
 use std::{fs::{self}, io::{self}, path::Path, time::Instant};
-use tracing::Level;
-#[allow(unused_imports)]
-use tracing::{debug, error, info, trace, warn};
 
 use clap::Parser;
 use cli::Commands;
 
 use commands::{download_favourites, download_search};
-use tracing_subscriber::fmt;
-
+use tracing::{error, info};
+use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub mod cli;
 pub mod commands;
@@ -16,6 +13,14 @@ pub mod funcs;
 pub mod type_defs;
 
 pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
+#[derive(Default)]
+pub struct DownloadStatistics {
+    pub completed: i64,
+    pub failed: i64,
+    pub total: i64,
+    pub time_taken: u64,
+}
 
 pub struct CliContext {
     pub verbose: bool,
@@ -40,12 +45,18 @@ fn main() {
         pages: args.pages, 
         num_threads: args.num_threads
     };
-    let log_format = fmt::format().without_time().with_target(false).compact();
     if args.verbose {
-        fmt().event_format(log_format).with_max_level(Level::DEBUG).with_target(true).init();
+        let logging = fmt::layer().compact().with_filter(EnvFilter::new("info,e_cli=debug"));
+        tracing_subscriber::registry()
+        .with(logging)
+        .init();
     } else {
-        fmt().event_format(log_format).init();
+        let logging = fmt::layer().without_time().compact().with_filter(EnvFilter::new("info"));
+        tracing_subscriber::registry()
+        .with(logging)
+        .init();
     }
+    
     
     if args.num_threads > 10 {
         return error!("Cannot go above 10 threads for downloads.");
@@ -86,6 +97,7 @@ fn main() {
 
     #[allow(unused_mut)]
     let mut bytes_downloaded;
+    let mut statistics = DownloadStatistics::default();
     let fn_start = Instant::now();
 
     match &args.command {
@@ -136,4 +148,9 @@ fn main() {
         bytes_downloaded / 1024.0 / 1024.0,
         fn_start.elapsed().as_secs(),
     );
+    // finish(statistics);
+}
+
+fn finish(statistics: DownloadStatistics) {
+    
 }

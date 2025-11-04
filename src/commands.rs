@@ -3,7 +3,7 @@ use std::sync::mpsc::channel;
 use reqwest::blocking::Client;
 
 use rayon::prelude::*;
-use tracing::{debug, error, info};
+use tracing::{Level, debug, error, info, span};
 
 use crate::{AGENT, CliContext, Login};
 use crate::funcs::{self, create_dl_dir, get_pages, slice_arr, sum_posts};
@@ -27,6 +27,9 @@ pub fn download_favourites(
     random: &bool,
     tags: &str,
 ) -> f64 {
+    let span = span!(Level::DEBUG, "DFavs");
+    let _guard = span.enter();
+
     info!("Downloading Favorites of {username} into the ./dl/ folder!");
     let client = get_client();
     let random_check: &str = if *random { "order:random" } else { "" };
