@@ -11,6 +11,9 @@ pub struct Args {
     #[arg[short = 'v', help = "Verbose Level: 1-Debug, 2-Trace.", default_value_t = 0]]
     pub verbose: usize,
 
+    #[arg[short = 'L', long, help = "Ability to sign-in into the API for better fetching of posts.", action]]
+    pub login: bool,
+
     #[arg[long, short = 'a', help = "Specify the api url to use.", default_value = "e926.net"]]
     pub api_source: String,
 
@@ -31,7 +34,7 @@ pub enum Commands {
     #[command[about = "Downloads the set amount of favourites from the username provided."]]
     DFavs {
         username: String,
-        #[arg[short, help = "The amount of posts to get. Cannot set above 320 (Api Max.)", default_value_t = 5]]
+        #[arg[short, help = "The amount of posts to get. Max=250.", default_value_t = 5]]
         count: u32,
         #[arg[short, help = "Adds the order:random in the search.", action]]
         random: bool,
@@ -41,7 +44,7 @@ pub enum Commands {
     #[command[about = "Downloads the set amount of posts with the tags provided."]]
     DTags {
         tags: String,
-        #[arg[short, help = "The amount of posts to get. Cannot set above 320 (Api Max.)", default_value_t = 5]]
+        #[arg[short, help = "The amount of posts to get. Max=250.", default_value_t = 5]]
         count: u32,
         #[arg[short, help = "Adds the order:random in the search.", action]]
         random: bool,

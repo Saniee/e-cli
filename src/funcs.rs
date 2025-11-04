@@ -3,10 +3,11 @@ use std::path::Path;
 use std::fs::File;
 use std::{fs::create_dir_all, io::Write};
 
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
 
-use crate::commands::get_client;
+use crate::Login;
+use crate::commands::{CliContext, get_client};
 use crate::type_defs::api_defs::{Post, Posts};
 
 pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
@@ -17,7 +18,7 @@ pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
     sum
 }
 
-pub fn download(data: Vec<Post>, lower_quality: &bool) -> f64 {
+pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> f64 {
     let span = span!(Level::DEBUG, "download");
     let _guard = span.enter();
     
@@ -38,12 +39,12 @@ pub fn download(data: Vec<Post>, lower_quality: &bool) -> f64 {
 
         let file_size: f64;
         if *lower_quality {
-            file_size = lower_quality_dl_file(&post, &artist_name);
+            file_size = lower_quality_dl_file(login, &post, &artist_name);
             dl_size += file_size;
         } else {
             match &post.file.url {
                 Some(url) => {
-                    file_size = download_file(url, &post.file.ext, post.id, &artist_name);
+                    file_size = download_file(login, url, &post.file.ext, post.id, &artist_name);
                     dl_size += file_size;
                 }
                 None => {
@@ -69,12 +70,9 @@ pub fn download(data: Vec<Post>, lower_quality: &bool) -> f64 {
     dl_size
 }
 
-pub fn download_file(target_url: &str, file_ext: &str, post_id: u64, artist_name: &str) -> f64 {
+pub fn download_file(login: &Login, target_url: &str, file_ext: &str, post_id: u64, artist_name: &str) -> f64 {
     let client = get_client();
-    let res = client
-        .get(target_url)
-        .send()
-        .expect("Error getting response");
+    let res = send_request(&client, login, target_url);
     let mut out = File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}"))
         .expect("Error creating file!");
     let byte_size: f64 = res.content_length().expect("Error getting byte amount!") as f64;
@@ -87,7 +85,7 @@ pub fn download_file(target_url: &str, file_ext: &str, post_id: u64, artist_name
     byte_size
 }
 
-pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
+pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> f64 {
     if !post.sample.has {
         info!(
             "Cannot download post {}-{} due it not having any file url.",
@@ -95,14 +93,14 @@ pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
         );
         return 0.0;
     } else if let Some(url) = &post.file.url {
-        return download_file(url, &post.file.ext, post.id, artist_name);
+        return download_file(login, url, &post.file.ext, post.id, artist_name);
     }
 
     if let Some(lower_quality) = &post.sample.alternates.lower_quality {
         if lower_quality.media_type == "video" {
-            download_file(&lower_quality.urls[0], &post.file.ext, post.id, artist_name)
+            download_file(login, &lower_quality.urls[0], &post.file.ext, post.id, artist_name)
         } else if let Some(sample_url) = &post.sample.url {
-            download_file(sample_url, &post.file.ext, post.id, artist_name)
+            download_file(login, sample_url, &post.file.ext, post.id, artist_name)
         } else {
             warn!(
                 "Cannot download post {}-{} due it not having any file url.",
@@ -111,7 +109,7 @@ pub fn lower_quality_dl_file(post: &Post, artist_name: &str) -> f64 {
             0.0
         }
     } else if let Some(sample_url) = &post.sample.url {
-        download_file(sample_url, &post.file.ext, post.id, artist_name)
+        download_file(login, sample_url, &post.file.ext, post.id, artist_name)
     } else {
         warn!(
             "Cannot download post {}-{} due it not having any file url.",
@@ -142,9 +140,9 @@ pub fn slice_arr(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
 }
 
 pub fn get_pages(
-    target_url: &str,
+    context: &CliContext,
+    login: &Login,
     client: Client,
-    num_pages: &i64,
     fav: &str,
     tags: &str,
     random: &str,
@@ -154,11 +152,11 @@ pub fn get_pages(
     let mut posts: Vec<Vec<Post>> = vec![];
     let span = span!(Level::DEBUG, "get_pages");
     let _guard = span.enter();
-    if *num_pages == -1 {
+    if context.pages == -1 {
         loop {
             let target: String = format!(
                 "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
-                target_url,
+                context.api_source,
                 fav,
                 tags,
                 random,
@@ -167,7 +165,7 @@ pub fn get_pages(
             );
             debug!(target);
 
-            let res = client.get(target).send().expect("Error getting response!");
+            let res = send_request(&client, login, &target);
             if let Err(e) = res.error_for_status_ref() {
                 error!("Response returned: {}", e);
                 break;
@@ -181,15 +179,15 @@ pub fn get_pages(
             posts.push(data.posts);
             pages += 1;
         }
-    } else if *num_pages > 0 {
+    } else if context.pages > 0 {
         loop {
-            if pages == *num_pages {
+            if pages == context.pages {
                 break;
             }
 
             let target: String = format!(
                 "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
-                target_url,
+                context.api_source,
                 fav,
                 tags,
                 random,
@@ -197,7 +195,7 @@ pub fn get_pages(
                 pages + 1
             );
 
-            let res = client.get(target).send().expect("Error getting response!");
+            let res = send_request(&client, login, &target);
             if let Err(e) = res.error_for_status_ref() {
                 error!("Response returned: {}", e);
                 break;
@@ -214,4 +212,12 @@ pub fn get_pages(
     }
 
     posts
+}
+
+pub fn send_request(client: &Client, login: &Login, target: &str) -> Response {
+    if !login.username.is_empty() && !login.api_key.is_empty() {
+        client.get(target).basic_auth(login.username.clone(), Some(login.api_key.clone())).send().expect("Error getting response!")
+    } else {
+        client.get(target).send().expect("Error getting response!")
+    }
 }
