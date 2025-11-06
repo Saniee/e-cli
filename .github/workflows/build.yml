@@ -18,7 +18,7 @@ jobs:
       - name: Create Build Dir
         run: mkdir build-dir
       - uses: actions/checkout@v4
-      - name: Build Windows Binary
+      - name: Build Linux Binary
         run: cargo build -r --target-dir ./build-dir
       - name: Publish Artifacts
         uses: actions/upload-artifact@v4
@@ -31,7 +31,7 @@ jobs:
       - name: Create Build Dir
         run: mkdir build-dir
       - uses: actions/checkout@v4
-      - name: Build Linux Binary
+      - name: Build Windows Binary
         run: cargo build -r --target-dir ./build-dir
       - name: Publish Artifacts
         uses: actions/upload-artifact@v4
