@@ -1,0 +1,60 @@
+name: Rolling Releases
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Build Dir
+        run: mkdir build-dir
+      - uses: actions/checkout@v4
+      - name: Build Windows Binary
+        run: cargo build -r --target-dir ./build-dir
+      - name: Publish Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: ./build-dir/release/e-cli
+          name: linux_release_x86_64
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - name: Create Build Dir
+        run: mkdir build-dir
+      - uses: actions/checkout@v4
+      - name: Build Linux Binary
+        run: cargo build -r --target-dir ./build-dir
+      - name: Publish Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: ./build-dir/release/e-cli.exe
+          name: windows_release_x86_64
+  create-release:
+    needs: [linux-build, windows-build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: ./build_artifacts
+      - name: List Dirs
+        run: ls -R
+      - name: Zip Windows Binary
+        run: 7z a ./build_artifacts/e-cli-win_x86_64.zip ./build_artifacts/e-cli.exe
+      - name: Zip Linux Binary
+        run: 7z a ./build_artifacts/e-cli-linux_x86_64.tar ./build_artifacts/e-cli
+      - name: Create new Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./build_artifacts/e-cli-win_x86_64.zip
+            ./build_artifacts/e-cli-linux_x86_64.tar
