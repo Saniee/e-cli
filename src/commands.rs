@@ -5,9 +5,9 @@ use reqwest::blocking::Client;
 use rayon::prelude::*;
 use tracing::{Level, debug, error, info, span};
 
-use crate::{AGENT, CliContext, DownloadStatistics, Login};
 use crate::funcs::{self, DownloadFinished, create_dl_dir, get_pages, slice_arr, sum_posts};
 use crate::type_defs::api_defs::{self, Post};
+use crate::{AGENT, CliContext, DownloadStatistics, Login};
 
 pub fn get_client() -> Client {
     Client::builder()
@@ -36,15 +36,7 @@ pub fn download_favourites(
     let tags: &str = if !tags.is_empty() { tags } else { "" };
     let fav: String = format!("fav:{}", username);
     info!("Getting posts from pages!");
-    let data: Vec<Vec<Post>> = get_pages(
-        context,
-        login,
-        client,
-        &fav,
-        tags,
-        random_check,
-        count,
-    );
+    let data: Vec<Vec<Post>> = get_pages(context, login, client, &fav, tags, random_check, count);
     if data.is_empty() {
         error!("No posts found...");
         return DownloadStatistics::default();
@@ -59,9 +51,9 @@ pub fn download_favourites(
     let mut finished: i64 = 0;
     let mut failed: i64 = 0;
     let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(context.num_threads)
-            .build()
-            .unwrap();
+        .num_threads(context.num_threads)
+        .build()
+        .unwrap();
     for posts in data {
         let sliced_data = slice_arr(api_defs::Posts { posts }, 5);
         let (tx, rx) = channel::<Vec<DownloadFinished>>();
@@ -84,7 +76,12 @@ pub fn download_favourites(
             full_sum += status.amount;
         }
     }
-    DownloadStatistics { completed: finished, failed, total, downloaded_amount: full_sum }
+    DownloadStatistics {
+        completed: finished,
+        failed,
+        total,
+        downloaded_amount: full_sum,
+    }
 }
 
 pub fn download_search(
@@ -100,15 +97,7 @@ pub fn download_search(
     let tags: &str = if !tags.is_empty() { tags } else { "" };
     let fav = "";
     info!("Getting posts from pages!");
-    let data: Vec<Vec<Post>> = get_pages(
-        context,
-        login,
-        client,
-        fav,
-        tags,
-        random_check,
-        count,
-    );
+    let data: Vec<Vec<Post>> = get_pages(context, login, client, fav, tags, random_check, count);
     if data.is_empty() {
         error!("No posts found...");
         return DownloadStatistics::default();
@@ -149,5 +138,10 @@ pub fn download_search(
             full_sum += status.amount;
         }
     }
-    DownloadStatistics { completed: finished, failed, total, downloaded_amount: full_sum }
+    DownloadStatistics {
+        completed: finished,
+        failed,
+        total,
+        downloaded_amount: full_sum,
+    }
 }

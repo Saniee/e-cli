@@ -6,9 +6,9 @@ use std::{fs::create_dir_all, io::Write};
 use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
 
-use crate::{CliContext, Login};
-use crate::commands::{get_client};
+use crate::commands::get_client;
 use crate::type_defs::api_defs::{Post, Posts};
+use crate::{CliContext, Login};
 
 pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
     let mut sum = 0;
@@ -96,10 +96,20 @@ pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> Downloa
         );
     }
 
-    DownloadFinished { amount_finished, amount_failed, amount: downloaded_bytes }
+    DownloadFinished {
+        amount_finished,
+        amount_failed,
+        amount: downloaded_bytes,
+    }
 }
 
-pub fn download_file(login: &Login, target_url: &str, file_ext: &str, post_id: u64, artist_name: &str) -> DownloadStatus {
+pub fn download_file(
+    login: &Login,
+    target_url: &str,
+    file_ext: &str,
+    post_id: u64,
+    artist_name: &str,
+) -> DownloadStatus {
     let span = span!(Level::DEBUG, "file_download");
     let _guard = span.enter();
     let mut status = DownloadStatus::default();
@@ -146,7 +156,13 @@ pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> D
 
     if let Some(lower_quality) = &post.sample.alternates.lower_quality {
         if lower_quality.media_type == "video" {
-            download_file(login, &lower_quality.urls[0], &post.file.ext, post.id, artist_name)
+            download_file(
+                login,
+                &lower_quality.urls[0],
+                &post.file.ext,
+                post.id,
+                artist_name,
+            )
         } else if let Some(sample_url) = &post.sample.url {
             download_file(login, sample_url, &post.file.ext, post.id, artist_name)
         } else {
@@ -266,7 +282,11 @@ pub fn get_pages(
 
 pub fn send_request(client: &Client, login: &Login, target: &str) -> Response {
     if !login.username.is_empty() && !login.api_key.is_empty() {
-        client.get(target).basic_auth(login.username.clone(), Some(login.api_key.clone())).send().expect("Error getting response!")
+        client
+            .get(target)
+            .basic_auth(login.username.clone(), Some(login.api_key.clone()))
+            .send()
+            .expect("Error getting response!")
     } else {
         client.get(target).send().expect("Error getting response!")
     }
