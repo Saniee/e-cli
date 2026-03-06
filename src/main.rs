@@ -1,8 +1,5 @@
 use std::{
-    fs::{self, File},
-    io::{self},
-    path::Path,
-    time::Instant,
+    fs::{self, File}, io::{self}, path::Path, time::Instant
 };
 
 use clap::Parser;
@@ -11,6 +8,8 @@ use cli::Commands;
 use commands::{download_favourites, download_search};
 use tracing::{Level, error, info, span};
 use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::commands::download_pool;
 
 pub mod cli;
 pub mod commands;
@@ -33,6 +32,10 @@ pub struct CliContext {
     pub lower_quality: bool,
     pub pages: i64,
     pub num_threads: usize,
+}
+
+pub struct DownloadContext {
+    pub pool_post_count: Option<u64>,
 }
 
 pub struct Login {
@@ -173,6 +176,9 @@ fn main() {
                 );
             }
             download_stats = download_search(&context, &login, tags, count, random);
+        },
+        Some(Commands::DPool { pool_id, zip, cbz }) => {
+            download_stats = download_pool(&context, &login, pool_id, *zip, *cbz);
         }
         None => return,
     }

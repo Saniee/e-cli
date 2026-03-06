@@ -4,3 +4,5 @@
 *.lock
 *.ps1
 *.log
+*.zip
+*.cbz

@@ -7,7 +7,7 @@ pub struct Posts {
     pub posts: Vec<Post>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Post {
     pub id: u64,
     pub file: File,
@@ -15,13 +15,13 @@ pub struct Post {
     pub sample: Sample,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct File {
     pub ext: String,
     pub url: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Tags {
     pub artist: Vec<String>,
 }
@@ -42,22 +42,31 @@ impl Tags {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Sample {
     pub has: bool,
     pub url: Option<String>,
     pub alternates: Alternates,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Alternates {
     #[serde(rename = "480p")]
     pub lower_quality: Option<LowerQuality>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct LowerQuality {
     #[serde(rename = "type")]
     pub media_type: String,
     pub urls: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PoolData {
+    pub id: u64,
+    pub name: String,
+    pub description: Option<String>,
+    pub post_ids: Vec<u64>,
+    pub post_count: u64,
 }

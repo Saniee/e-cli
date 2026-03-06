@@ -49,4 +49,13 @@ pub enum Commands {
         #[arg[short = 'r', help = "Adds the order:random in the search.", action]]
         random: bool,
     },
+    #[command[about = "Downloads a pool with the indexes in the names of the files."]]
+    DPool {
+        #[arg(help = "The Pool ID")]
+        pool_id: u64,
+        #[arg[short = 'z', help = "Zips together the downloaded files.", action]]
+        zip: bool,
+        #[arg[long = "cbz", help = "Makes the zip a cbz file for e-readers to be readable.", action]]
+        cbz: bool
+    }
 }

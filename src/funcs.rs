@@ -7,7 +7,7 @@ use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
 
 use crate::commands::get_client;
-use crate::type_defs::api_defs::{Post, Posts};
+use crate::type_defs::api_defs::{PoolData, Post, Posts};
 use crate::{CliContext, Login};
 
 pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
@@ -30,7 +30,12 @@ pub struct DownloadFinished {
     pub amount: f64,
 }
 
-pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> DownloadFinished {
+pub fn download(
+    login: &Login,
+    data: Vec<Post>,
+    index: Option<&u64>,
+    lower_quality: &bool,
+) -> DownloadFinished {
     let span = span!(Level::DEBUG, "download_handler");
     let _guard = span.enter();
 
@@ -54,7 +59,7 @@ pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> Downloa
 
         let file_size: f64;
         if *lower_quality {
-            let stat = lower_quality_dl_file(login, &post, &artist_name);
+            let stat = lower_quality_dl_file(login, &post, &artist_name, index);
             if stat.finished {
                 downloaded_bytes += stat.downloaded_bytes;
                 file_size = stat.downloaded_bytes;
@@ -66,7 +71,8 @@ pub fn download(login: &Login, data: Vec<Post>, lower_quality: &bool) -> Downloa
         } else {
             match &post.file.url {
                 Some(url) => {
-                    let stat = download_file(login, url, &post.file.ext, post.id, &artist_name);
+                    let stat =
+                        download_file(login, url, &post.file.ext, post.id, &artist_name, index);
                     if stat.finished {
                         downloaded_bytes += stat.downloaded_bytes;
                         file_size = stat.downloaded_bytes;
@@ -109,6 +115,7 @@ pub fn download_file(
     file_ext: &str,
     post_id: u64,
     artist_name: &str,
+    index: Option<&u64>,
 ) -> DownloadStatus {
     let span = span!(Level::DEBUG, "file_download");
     let _guard = span.enter();
@@ -117,12 +124,22 @@ pub fn download_file(
     let client = get_client();
     let res = send_request(&client, login, target_url);
     debug!("{res:?}");
-    let mut out = match File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}")) {
-        Ok(o) => o,
-        Err(_) => {
-            return DownloadStatus::default();
-        }
-    };
+    let mut out;
+    if let Some(i) = index {
+        out = match File::create(format!("./dl/{i}-{artist_name}-{post_id}.{file_ext}")) {
+            Ok(o) => o,
+            Err(_) => {
+                return DownloadStatus::default();
+            }
+        };
+    } else {
+        out = match File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}")) {
+            Ok(o) => o,
+            Err(_) => {
+                return DownloadStatus::default();
+            }
+        };
+    }
     let byte_size: f64 = res.content_length().expect("Error getting byte amount!") as f64;
     status.downloaded_bytes = byte_size;
     let bytes = match res.bytes() {
@@ -140,7 +157,12 @@ pub fn download_file(
     status
 }
 
-pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> DownloadStatus {
+pub fn lower_quality_dl_file(
+    login: &Login,
+    post: &Post,
+    artist_name: &str,
+    index: Option<&u64>,
+) -> DownloadStatus {
     let span = span!(Level::DEBUG, "lower_quality_handler");
     let _guard = span.enter();
 
@@ -151,7 +173,7 @@ pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> D
         );
         return DownloadStatus::default();
     } else if let Some(url) = &post.file.url {
-        return download_file(login, url, &post.file.ext, post.id, artist_name);
+        return download_file(login, url, &post.file.ext, post.id, artist_name, index);
     }
 
     if let Some(lower_quality) = &post.sample.alternates.lower_quality {
@@ -162,9 +184,17 @@ pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> D
                 &post.file.ext,
                 post.id,
                 artist_name,
+                index,
             )
         } else if let Some(sample_url) = &post.sample.url {
-            download_file(login, sample_url, &post.file.ext, post.id, artist_name)
+            download_file(
+                login,
+                sample_url,
+                &post.file.ext,
+                post.id,
+                artist_name,
+                index,
+            )
         } else {
             warn!(
                 "Cannot download post {}-{} due it not having any file url.",
@@ -173,7 +203,14 @@ pub fn lower_quality_dl_file(login: &Login, post: &Post, artist_name: &str) -> D
             DownloadStatus::default()
         }
     } else if let Some(sample_url) = &post.sample.url {
-        download_file(login, sample_url, &post.file.ext, post.id, artist_name)
+        download_file(
+            login,
+            sample_url,
+            &post.file.ext,
+            post.id,
+            artist_name,
+            index,
+        )
     } else {
         warn!(
             "Cannot download post {}-{} due it not having any file url.",
@@ -193,10 +230,19 @@ pub fn create_dl_dir() -> bool {
     }
 }
 
-pub fn slice_arr(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
+pub fn slice_posts(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
     let mut res: Vec<Vec<Post>> = Vec::new();
     let posts = arr.posts;
     let slices = posts.chunks(chunk_size as usize);
+    for slice in slices {
+        res.push(slice.to_vec());
+    }
+    res
+}
+
+pub fn slice_pool_posts(arr: Vec<(u64, Post)>, chunk_size: i32) -> Vec<Vec<(u64, Post)>> {
+    let mut res: Vec<Vec<(u64, Post)>> = Vec::new();
+    let slices = arr.chunks(chunk_size as usize);
     for slice in slices {
         res.push(slice.to_vec());
     }
@@ -275,6 +321,61 @@ pub fn get_pages(
             posts.push(data.posts);
             pages += 1;
         }
+    }
+
+    posts
+}
+
+pub fn get_pool(
+    context: &CliContext,
+    client: &Client,
+    login: &Login,
+    pool_id: &u64,
+) -> Option<PoolData> {
+    let target: String = format!(
+        "https://{}/pools.json?limit=1&search[id]={}",
+        context.api_source, pool_id
+    );
+    let res = send_request(&client, login, &target);
+    if let Err(e) = res.error_for_status_ref() {
+        error!("Response returned: {}", e);
+        return None;
+    }
+
+    let data = res
+        .json::<Vec<PoolData>>()
+        .expect("Error reading response json.");
+    if data.is_empty() {
+        return None;
+    }
+
+    return Some(data[0].clone());
+}
+
+pub fn get_post_data(
+    context: &CliContext,
+    client: &Client,
+    login: &Login,
+    post_ids: &Vec<u64>,
+) -> Vec<Post> {
+    let mut posts: Vec<Post> = Vec::new();
+
+    for id in post_ids {
+        let target = format!(
+            "https://{}/posts.json?tags=id:{}&page=1&limit=1",
+            context.api_source, id
+        );
+        let data = send_request(client, login, &target);
+        if let Err(e) = data.error_for_status_ref() {
+            error!("Response returned: {}", e);
+            return Vec::new();
+        }
+
+        let post = data.json::<Posts>().expect("Error reading response json.");
+        if post.posts.is_empty() {
+            return Vec::new();
+        }
+        posts.push(post.posts[0].clone());
     }
 
     posts
