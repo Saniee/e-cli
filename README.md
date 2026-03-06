@@ -12,6 +12,7 @@ What it can do:
 - [x] Downloading posts with specific Tags.
 - [x] Multi-Threaded downloads.
 - [x] Bulk Downloads.
+- [x] Pool Downloads, with Page Indexes (Not Multi-Threaded).
 
 What it can't do:
 
