@@ -185,15 +185,12 @@ pub fn download_file(
     }
 }
 
-/// Attempts to download a lower-quality variant of `post`, for use when
-/// `--lower-quality` is set. Note the actual precedence: if `post` has no
-/// sample data at all, this fails immediately (no fallback to the full-res
-/// file). Otherwise, if `post.file.url` is present, that — the full-resolution
-/// URL — is used directly; only when `file.url` is absent does it fall through
-/// to a genuinely lower-quality source (the sample's 480p video alternate,
-/// then the sample image URL). In other words, a full-quality download can
-/// still happen here whenever `file.url` exists alongside sample data. Returns
-/// a default (`finished: false`) `DownloadStatus` if no usable URL is found.
+/// Downloads a lower-quality variant of `post`, for use when `--lower-quality`
+/// is set. Precedence, preferring an actually-lower-quality source first:
+/// the sample's 480p video alternate, then the sample image/thumbnail URL,
+/// and only if neither exists does this fall back to the full-resolution
+/// `post.file.url`. Returns a default (`finished: false`) `DownloadStatus` if
+/// none of those are available.
 #[allow(clippy::too_many_arguments)]
 pub fn lower_quality_dl_file(
     client: &Client,
@@ -206,14 +203,18 @@ pub fn lower_quality_dl_file(
     let span = span!(Level::DEBUG, "lower_quality_handler");
     let _guard = span.enter();
 
-    if !post.sample.has {
-        info!(
-            "Cannot download post {}-{} due it not having any file url.",
-            artist_name, &post.id
-        );
-        return DownloadStatus::default();
-    } else if let Some(url) = &post.file.url {
-        return download_file(
+    let url = post
+        .sample
+        .alternates
+        .lower_quality
+        .as_ref()
+        .filter(|lq| lq.media_type == "video")
+        .map(|lq| &lq.urls[0])
+        .or(post.sample.url.as_ref())
+        .or(post.file.url.as_ref());
+
+    match url {
+        Some(url) => download_file(
             client,
             login,
             url,
@@ -222,56 +223,14 @@ pub fn lower_quality_dl_file(
             artist_name,
             index,
             output_dir,
-        );
-    }
-
-    if let Some(lower_quality) = &post.sample.alternates.lower_quality {
-        if lower_quality.media_type == "video" {
-            download_file(
-                client,
-                login,
-                &lower_quality.urls[0],
-                &post.file.ext,
-                post.id,
-                artist_name,
-                index,
-                output_dir,
-            )
-        } else if let Some(sample_url) = &post.sample.url {
-            download_file(
-                client,
-                login,
-                sample_url,
-                &post.file.ext,
-                post.id,
-                artist_name,
-                index,
-                output_dir,
-            )
-        } else {
+        ),
+        None => {
             warn!(
                 "Cannot download post {}-{} due it not having any file url.",
                 artist_name, &post.id
             );
             DownloadStatus::default()
         }
-    } else if let Some(sample_url) = &post.sample.url {
-        download_file(
-            client,
-            login,
-            sample_url,
-            &post.file.ext,
-            post.id,
-            artist_name,
-            index,
-            output_dir,
-        )
-    } else {
-        warn!(
-            "Cannot download post {}-{} due it not having any file url.",
-            artist_name, &post.id
-        );
-        DownloadStatus::default()
     }
 }
 
