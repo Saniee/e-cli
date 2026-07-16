@@ -6,16 +6,24 @@ use std::{fs::create_dir_all, io::Write};
 use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
 
-use crate::commands::get_client;
 use crate::type_defs::api_defs::{PoolData, Post, Posts};
 use crate::{CliContext, Login};
 
+/// Total number of posts across all pages in `data` (i.e. the flattened count,
+/// as returned by [`get_pages`]).
 pub fn sum_posts(data: &Vec<Vec<Post>>) -> usize {
     let mut sum = 0;
     for posts in data {
         sum += posts.len();
     }
     sum
+}
+
+fn file_name(index: Option<&u64>, artist_name: &str, post_id: u64, file_ext: &str) -> String {
+    match index {
+        Some(i) => format!("{i:04}-{artist_name}-{post_id}.{file_ext}"),
+        None => format!("{artist_name}-{post_id}.{file_ext}"),
+    }
 }
 
 #[derive(Default)]
@@ -30,11 +38,23 @@ pub struct DownloadFinished {
     pub amount: f64,
 }
 
+/// Downloads a batch of posts into `output_dir`, skipping (and logging a warning
+/// for) any post whose target file already exists on disk.
+///
+/// `index` is applied to *every* post in `data` as a shared filename prefix (or
+/// `None` for no prefix) — for per-post distinct indexes (as pool downloads need),
+/// call this once per post with that post's own index rather than passing a
+/// multi-post batch. If `lower_quality` is true, [`lower_quality_dl_file`] is used
+/// instead of the full-resolution [`download_file`] where a sample/lower-quality
+/// variant is available.
+#[allow(clippy::too_many_arguments)]
 pub fn download(
+    client: &Client,
     login: &Login,
     data: Vec<Post>,
     index: Option<&u64>,
     lower_quality: &bool,
+    output_dir: &Path,
 ) -> DownloadFinished {
     let span = span!(Level::DEBUG, "download_handler");
     let _guard = span.enter();
@@ -46,8 +66,7 @@ pub fn download(
     for post in data {
         let artist_name = post.tags.parse_artists();
 
-        let path_string = format!("./dl/{}-{}.{}", artist_name, post.id, post.file.ext);
-        let path = Path::new(&path_string);
+        let path = output_dir.join(file_name(index, &artist_name, post.id, &post.file.ext));
 
         if path.exists() {
             warn!(
@@ -57,29 +76,48 @@ pub fn download(
             continue;
         }
 
-        let file_size: f64;
         if *lower_quality {
-            let stat = lower_quality_dl_file(login, &post, &artist_name, index);
+            let stat = lower_quality_dl_file(client, login, &post, &artist_name, index, output_dir);
             if stat.finished {
                 downloaded_bytes += stat.downloaded_bytes;
-                file_size = stat.downloaded_bytes;
                 amount_finished += 1;
+                info!(
+                    "Downloaded {}-{}.{}! File size: {:.2} MB",
+                    artist_name,
+                    post.id,
+                    post.file.ext,
+                    stat.downloaded_bytes / 1024.0 / 1024.0
+                );
             } else {
-                file_size = 0.0;
                 amount_failed += 1;
+                warn!("Failed to download {}-{}.{}", artist_name, post.id, post.file.ext);
             }
         } else {
             match &post.file.url {
                 Some(url) => {
-                    let stat =
-                        download_file(login, url, &post.file.ext, post.id, &artist_name, index);
+                    let stat = download_file(
+                        client,
+                        login,
+                        url,
+                        &post.file.ext,
+                        post.id,
+                        &artist_name,
+                        index,
+                        output_dir,
+                    );
                     if stat.finished {
                         downloaded_bytes += stat.downloaded_bytes;
-                        file_size = stat.downloaded_bytes;
                         amount_finished += 1;
+                        info!(
+                            "Downloaded {}-{}.{}! File size: {:.2} MB",
+                            artist_name,
+                            post.id,
+                            post.file.ext,
+                            stat.downloaded_bytes / 1024.0 / 1024.0
+                        );
                     } else {
-                        file_size = 0.0;
                         amount_failed += 1;
+                        warn!("Failed to download {}-{}.{}", artist_name, post.id, post.file.ext);
                     }
                 }
                 None => {
@@ -88,18 +126,9 @@ pub fn download(
                         artist_name, post.id
                     );
                     amount_failed += 1;
-                    file_size = 0.0;
                 }
             }
         }
-
-        info!(
-            "Downloaded {}-{}.{}! File size: {:.2} MB",
-            artist_name,
-            post.id,
-            post.file.ext,
-            file_size / 1024.0 / 1024.0
-        );
     }
 
     DownloadFinished {
@@ -109,59 +138,70 @@ pub fn download(
     }
 }
 
+/// Streams `target_url`'s response body directly to a file in `output_dir`
+/// (via `Response::copy_to`, so the whole file is never buffered in memory),
+/// named `{index-}{artist_name}-{post_id}.{file_ext}` (zero-padded 4-digit
+/// index prefix if `Some`). `downloaded_bytes` on success reflects the actual
+/// bytes written, not a trusted `Content-Length` header. Returns a
+/// `DownloadStatus` with `finished: false` if the request, file creation, or
+/// the copy itself fails (the failure is logged; this function does not panic
+/// on network/IO errors).
+#[allow(clippy::too_many_arguments)]
 pub fn download_file(
+    client: &Client,
     login: &Login,
     target_url: &str,
     file_ext: &str,
     post_id: u64,
     artist_name: &str,
     index: Option<&u64>,
+    output_dir: &Path,
 ) -> DownloadStatus {
     let span = span!(Level::DEBUG, "file_download");
     let _guard = span.enter();
-    let mut status = DownloadStatus::default();
 
-    let client = get_client();
-    let res = send_request(&client, login, target_url);
-    debug!("{res:?}");
-    let mut out;
-    if let Some(i) = index {
-        out = match File::create(format!("./dl/{i}-{artist_name}-{post_id}.{file_ext}")) {
-            Ok(o) => o,
-            Err(_) => {
-                return DownloadStatus::default();
-            }
-        };
-    } else {
-        out = match File::create(format!("./dl/{artist_name}-{post_id}.{file_ext}")) {
-            Ok(o) => o,
-            Err(_) => {
-                return DownloadStatus::default();
-            }
-        };
-    }
-    let byte_size: f64 = res.content_length().expect("Error getting byte amount!") as f64;
-    status.downloaded_bytes = byte_size;
-    let bytes = match res.bytes() {
-        Ok(b) => b.to_vec(),
+    let mut res = send_request(client, login, target_url);
+    debug!(status = %res.status(), content_length = ?res.content_length(), "response received");
+    let name = file_name(index, artist_name, post_id, file_ext);
+    let mut out = match File::create(output_dir.join(name)) {
+        Ok(o) => o,
         Err(_) => {
             return DownloadStatus::default();
         }
     };
 
-    let _ = std::io::copy(&mut &bytes[..], &mut out);
-
-    out.flush().expect("Err");
-    status.finished = true;
-
-    status
+    match res.copy_to(&mut out) {
+        Ok(written) => {
+            out.flush().expect("Err");
+            DownloadStatus {
+                finished: true,
+                downloaded_bytes: written as f64,
+            }
+        }
+        Err(e) => {
+            warn!("Failed to stream {artist_name}-{post_id}.{file_ext}: {e}");
+            DownloadStatus::default()
+        }
+    }
 }
 
+/// Attempts to download a lower-quality variant of `post`, for use when
+/// `--lower-quality` is set. Note the actual precedence: if `post` has no
+/// sample data at all, this fails immediately (no fallback to the full-res
+/// file). Otherwise, if `post.file.url` is present, that — the full-resolution
+/// URL — is used directly; only when `file.url` is absent does it fall through
+/// to a genuinely lower-quality source (the sample's 480p video alternate,
+/// then the sample image URL). In other words, a full-quality download can
+/// still happen here whenever `file.url` exists alongside sample data. Returns
+/// a default (`finished: false`) `DownloadStatus` if no usable URL is found.
+#[allow(clippy::too_many_arguments)]
 pub fn lower_quality_dl_file(
+    client: &Client,
     login: &Login,
     post: &Post,
     artist_name: &str,
     index: Option<&u64>,
+    output_dir: &Path,
 ) -> DownloadStatus {
     let span = span!(Level::DEBUG, "lower_quality_handler");
     let _guard = span.enter();
@@ -173,27 +213,40 @@ pub fn lower_quality_dl_file(
         );
         return DownloadStatus::default();
     } else if let Some(url) = &post.file.url {
-        return download_file(login, url, &post.file.ext, post.id, artist_name, index);
+        return download_file(
+            client,
+            login,
+            url,
+            &post.file.ext,
+            post.id,
+            artist_name,
+            index,
+            output_dir,
+        );
     }
 
     if let Some(lower_quality) = &post.sample.alternates.lower_quality {
         if lower_quality.media_type == "video" {
             download_file(
+                client,
                 login,
                 &lower_quality.urls[0],
                 &post.file.ext,
                 post.id,
                 artist_name,
                 index,
+                output_dir,
             )
         } else if let Some(sample_url) = &post.sample.url {
             download_file(
+                client,
                 login,
                 sample_url,
                 &post.file.ext,
                 post.id,
                 artist_name,
                 index,
+                output_dir,
             )
         } else {
             warn!(
@@ -204,12 +257,14 @@ pub fn lower_quality_dl_file(
         }
     } else if let Some(sample_url) = &post.sample.url {
         download_file(
+            client,
             login,
             sample_url,
             &post.file.ext,
             post.id,
             artist_name,
             index,
+            output_dir,
         )
     } else {
         warn!(
@@ -220,16 +275,23 @@ pub fn lower_quality_dl_file(
     }
 }
 
-pub fn create_dl_dir() -> bool {
-    let dir_path = Path::new("./dl/");
-    if !dir_path.exists() {
-        create_dir_all("./dl/").expect("Error creating ./dl/ directory!");
+/// Creates `dir` (and any missing parent directories) if it doesn't already
+/// exist. Returns `true` if the directory was created, `false` if it already
+/// existed. Panics if directory creation fails (e.g. permissions).
+pub fn create_dl_dir(dir: &Path) -> bool {
+    if !dir.exists() {
+        create_dir_all(dir).expect("Error creating output directory!");
         true
     } else {
         false
     }
 }
 
+/// Splits `arr.posts` into chunks of at most `chunk_size` — the unit of work
+/// handed to each parallel download task in [`crate::commands`]. Panics if
+/// `chunk_size <= 0` (see `[T]::chunks`); callers should validate thread/chunk
+/// counts before calling this (the CLI does so via
+/// [`crate::cli::validate_args`]).
 pub fn slice_posts(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
     let mut res: Vec<Vec<Post>> = Vec::new();
     let posts = arr.posts;
@@ -240,6 +302,8 @@ pub fn slice_posts(arr: Posts, chunk_size: i32) -> Vec<Vec<Post>> {
     res
 }
 
+/// Same as [`slice_posts`], but for `(index, post)` pairs as used by pool
+/// downloads, where each post carries its own distinct filename index.
 pub fn slice_pool_posts(arr: Vec<(u64, Post)>, chunk_size: i32) -> Vec<Vec<(u64, Post)>> {
     let mut res: Vec<Vec<(u64, Post)>> = Vec::new();
     let slices = arr.chunks(chunk_size as usize);
@@ -249,10 +313,18 @@ pub fn slice_pool_posts(arr: Vec<(u64, Post)>, chunk_size: i32) -> Vec<Vec<(u64,
     res
 }
 
+/// Fetches all matching posts for a favourites/tag search, one page at a time,
+/// stopping when the API returns an empty page. `context.pages == -1` fetches
+/// every page; `context.pages > 0` fetches at most that many; any other value
+/// (e.g. `0`) fetches nothing. `fav`/`tags`/`random` are combined into the
+/// request's `tags` query parameter as-is (pass `""` for any that don't apply).
+/// A non-2xx response stops pagination early (logged, not propagated as an
+/// error — check the returned `Vec`'s length rather than expecting a
+/// `Result`), but a response body that fails to parse as JSON will panic.
 pub fn get_pages(
     context: &CliContext,
     login: &Login,
-    client: Client,
+    client: &Client,
     fav: &str,
     tags: &str,
     random: &str,
@@ -277,7 +349,7 @@ pub fn get_pages(
             );
             debug!(target);
 
-            let res = send_request(&client, login, &target);
+            let res = send_request(client, login, &target);
             if let Err(e) = res.error_for_status_ref() {
                 error!("Response returned: {}", e);
                 break;
@@ -307,7 +379,7 @@ pub fn get_pages(
                 pages + 1
             );
 
-            let res = send_request(&client, login, &target);
+            let res = send_request(client, login, &target);
             if let Err(e) = res.error_for_status_ref() {
                 error!("Response returned: {}", e);
                 break;
@@ -326,6 +398,9 @@ pub fn get_pages(
     posts
 }
 
+/// Looks up pool metadata (name, description, ordered `post_ids`) by `pool_id`.
+/// Returns `None` if the request fails (non-2xx) or no pool with that ID
+/// exists; panics if a 2xx response body fails to parse as JSON.
 pub fn get_pool(
     context: &CliContext,
     client: &Client,
@@ -352,6 +427,11 @@ pub fn get_pool(
     return Some(data[0].clone());
 }
 
+/// Fetches full post data for each ID in `post_ids`, one request per ID, in
+/// the order given (this is what lets [`crate::commands::download_pool`]
+/// preserve a pool's original ordering). On the first failed request or empty
+/// result, returns an empty `Vec` immediately rather than partial results —
+/// callers should treat an empty return as "failed", not "no posts requested".
 pub fn get_post_data(
     context: &CliContext,
     client: &Client,
@@ -381,6 +461,12 @@ pub fn get_post_data(
     posts
 }
 
+/// Performs a GET request to `target`, using HTTP basic auth with
+/// `login.username`/`login.api_key` if both are non-empty, otherwise
+/// unauthenticated. Does not check the response status — callers are
+/// responsible for calling `.error_for_status_ref()` or similar. Panics if the
+/// request itself fails to send (network error), rather than returning a
+/// `Result`.
 pub fn send_request(client: &Client, login: &Login, target: &str) -> Response {
     if !login.username.is_empty() && !login.api_key.is_empty() {
         client
@@ -392,3 +478,7 @@ pub fn send_request(client: &Client, login: &Login, target: &str) -> Response {
         client.get(target).send().expect("Error getting response!")
     }
 }
+
+#[cfg(test)]
+#[path = "funcs_tests.rs"]
+mod tests;

@@ -1,50 +1,53 @@
 use std::{
-    fs::{self, File}, io::{self}, path::Path, time::Instant
+    fs,
+    io::{self, Write},
+    path::Path,
+    time::Instant,
 };
 
 use clap::Parser;
-use cli::Commands;
-
-use commands::{download_favourites, download_search};
+use e_cli::{
+    CliContext, DownloadStatistics, Login,
+    cli::{self, Commands},
+    commands::{self, download_favourites, download_pool, download_search},
+};
+use indicatif::MultiProgress;
 use tracing::{Level, error, info, span};
-use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    EnvFilter, Layer, fmt, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
+};
 
-use crate::commands::download_pool;
+pub const DL_DIR: &str = "./dl/";
 
-pub mod cli;
-pub mod commands;
-pub mod funcs;
-pub mod type_defs;
+/// A `tracing` writer that suspends any active `indicatif` progress bars
+/// while a log line is written, so bar rendering doesn't get clobbered.
+#[derive(Clone)]
+struct ProgressWriter(MultiProgress);
 
-pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+impl Write for ProgressWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.suspend(|| io::stderr().write(buf))
+    }
 
-#[derive(Default)]
-pub struct DownloadStatistics {
-    pub completed: i64,
-    pub failed: i64,
-    pub total: usize,
-    pub downloaded_amount: f64,
+    fn flush(&mut self) -> io::Result<()> {
+        io::stderr().flush()
+    }
 }
 
-pub struct CliContext {
-    pub verbose: bool,
-    pub api_source: String,
-    pub lower_quality: bool,
-    pub pages: i64,
-    pub num_threads: usize,
-}
+impl<'a> MakeWriter<'a> for ProgressWriter {
+    type Writer = ProgressWriter;
 
-pub struct DownloadContext {
-    pub pool_post_count: Option<u64>,
-}
-
-pub struct Login {
-    pub username: String,
-    pub api_key: String,
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
 }
 
 fn main() {
     let args = cli::Args::parse();
+
+    if let Err(e) = cli::validate_args(&args) {
+        return error!("{e}");
+    }
 
     let context = CliContext {
         verbose: args.verbose,
@@ -53,12 +56,15 @@ fn main() {
         pages: args.pages,
         num_threads: args.num_threads,
     };
+    let mp = MultiProgress::new();
+    let progress_writer = ProgressWriter(mp.clone());
     if args.verbose {
         let logging = fmt::layer()
             .compact()
             .with_target(false)
+            .with_writer(progress_writer)
             .with_filter(EnvFilter::new("info,e_cli=debug"));
-        let log_file = File::create("debug.log").expect("Error creating log file.");
+        let log_file = std::fs::File::create("debug.log").expect("Error creating log file.");
         let file_logging = fmt::layer()
             .json()
             .with_writer(log_file)
@@ -72,41 +78,15 @@ fn main() {
             .without_time()
             .with_target(false)
             .compact()
+            .with_writer(progress_writer)
             .with_filter(EnvFilter::new("info"));
         tracing_subscriber::registry().with(logging).init();
-    }
-
-    if args.num_threads > 10 {
-        return error!("Cannot go above 10 threads for downloads.");
-    }
-
-    if let Some(Commands::DFavs {
-        username: _,
-        count,
-        random: _,
-        tags: _,
-    }) = &args.command
-        && *count > 250
-    {
-        return error!("Cannot go above 250 posts per page.");
-    }
-    if let Some(Commands::DTags {
-        tags: _,
-        count,
-        random: _,
-    }) = &args.command
-        && *count > 250
-    {
-        return error!("Cannot go above 250 posts per page.");
     }
 
     let mut username = String::new();
     let mut api_key = String::new();
     if args.login {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent(AGENT)
-            .build()
-            .expect("Error creating auth client.");
+        let client = commands::get_client();
 
         info!("Sign-In via inputing your username and api_key.");
         info!("This info isn't sent anywhere. Only when the cli runs.");
@@ -148,13 +128,15 @@ fn main() {
     let span = span!(Level::DEBUG, "main");
     let _guard = span.enter();
 
+    let dl_dir = Path::new(DL_DIR);
+
     match &args.command {
         Some(Commands::ClearDl) => {
-            if !Path::new("./dl/").exists() {
+            if !dl_dir.exists() {
                 return info!("Nothing to clean... Exiting!");
             }
 
-            fs::remove_dir_all("./dl/").expect("Err");
+            fs::remove_dir_all(dl_dir).expect("Err");
             return info!("Cleaned the ./dl/ folder and also deleted the folder fully!");
         }
         Some(Commands::DFavs {
@@ -163,22 +145,24 @@ fn main() {
             random,
             tags,
         }) => {
-            download_stats = download_favourites(&context, &login, username, count, random, tags);
+            download_stats =
+                download_favourites(&context, &login, username, count, random, tags, &mp, dl_dir);
         }
         Some(Commands::DTags {
             tags,
             count,
             random,
         }) => {
-            if args.pages == -1 {
-                return error!(
-                    "You NEED to specify the page amount for downloading with tags. Exiting..."
-                );
+            download_stats = download_search(&context, &login, tags, count, random, &mp, dl_dir);
+        }
+        Some(Commands::DPool { pool_id }) => {
+            download_stats = download_pool(&context, &login, pool_id, &mp, dl_dir);
+        }
+        Some(Commands::Zip { name, format }) => {
+            if !commands::zip_downloads(dl_dir, name, *format) {
+                error!("Failed to package ./dl/ into an archive.");
             }
-            download_stats = download_search(&context, &login, tags, count, random);
-        },
-        Some(Commands::DPool { pool_id, zip, cbz }) => {
-            download_stats = download_pool(&context, &login, pool_id, *zip, *cbz);
+            return;
         }
         None => return,
     }

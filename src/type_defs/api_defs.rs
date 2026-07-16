@@ -70,3 +70,32 @@ pub struct PoolData {
     pub post_ids: Vec<u64>,
     pub post_count: u64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tags(artists: Vec<&str>) -> Tags {
+        Tags {
+            artist: artists.into_iter().map(String::from).collect(),
+        }
+    }
+
+    #[test]
+    fn parse_artists_none() {
+        assert_eq!(tags(vec![]).parse_artists(), "unknown-artist");
+    }
+
+    #[test]
+    fn parse_artists_one() {
+        assert_eq!(tags(vec!["someartist"]).parse_artists(), "someartist");
+    }
+
+    #[test]
+    fn parse_artists_many() {
+        assert_eq!(
+            tags(vec!["artist_a", "artist_b", "artist_c"]).parse_artists(),
+            "artist_a, artist_b, artist_c"
+        );
+    }
+}

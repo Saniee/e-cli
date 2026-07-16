@@ -1,20 +1,28 @@
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc::channel;
 
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 
 use rayon::prelude::*;
 use tracing::{Level, debug, error, info, span};
 
+use crate::cli::ArchiveFormat;
 use crate::funcs::{
-    self, DownloadFinished, create_dl_dir, get_pages, get_pool, get_post_data, slice_posts,
-    sum_posts,
+    self, DownloadFinished, create_dl_dir, get_pages, get_pool, get_post_data, slice_pool_posts,
+    slice_posts, sum_posts,
 };
 use crate::type_defs::api_defs::{self, Post};
 use crate::{AGENT, CliContext, DownloadStatistics, Login};
 
+/// Builds a `reqwest::blocking::Client` configured with e-cli's `User-Agent` and
+/// no request timeout (downloads of large files can legitimately take a while).
+/// Callers should build one client per top-level operation and reuse it across
+/// requests/downloads rather than constructing a new one per file, so that
+/// connection pooling/keep-alive actually kicks in.
 pub fn get_client() -> Client {
     Client::builder()
         .user_agent(AGENT)
@@ -24,6 +32,25 @@ pub fn get_client() -> Client {
         .expect("Error creating Client")
 }
 
+fn new_progress_bar(mp: &MultiProgress, total: u64) -> ProgressBar {
+    let bar = mp.add(ProgressBar::new(total));
+    bar.set_style(
+        ProgressStyle::with_template("{spinner} [{bar:40}] {pos}/{len} files ({eta})")
+            .expect("Invalid progress bar template")
+            .progress_chars("#>-"),
+    );
+    bar
+}
+
+/// Downloads a user's favourited posts into `output_dir`, optionally narrowed by
+/// `tags`. Pages are fetched according to `context.pages`, and each page's posts
+/// are downloaded in parallel chunks sized by `context.num_threads`.
+///
+/// `mp` receives one progress bar tracking overall files completed/total; `count`
+/// is the API page size (posts per request), not a total cap. Files that already
+/// exist in `output_dir` are skipped and counted toward neither `completed` nor
+/// `failed`. Returns [`DownloadStatistics::default`] (all zero) if no posts were
+/// found for the given favourites/tags.
 #[allow(clippy::too_many_arguments)]
 pub fn download_favourites(
     context: &CliContext,
@@ -32,6 +59,8 @@ pub fn download_favourites(
     count: &u32,
     random: &bool,
     tags: &str,
+    mp: &MultiProgress,
+    output_dir: &Path,
 ) -> DownloadStatistics {
     let span = span!(Level::DEBUG, "DFavs");
     let _guard = span.enter();
@@ -42,27 +71,31 @@ pub fn download_favourites(
     let tags: &str = if !tags.is_empty() { tags } else { "" };
     let fav: String = format!("fav:{}", username);
     info!("Getting posts from pages!");
-    let data: Vec<Vec<Post>> = get_pages(context, login, client, &fav, tags, random_check, count);
+    let data: Vec<Vec<Post>> =
+        get_pages(context, login, &client, &fav, tags, random_check, count);
     if data.is_empty() {
         error!("No posts found...");
         return DownloadStatistics::default();
     }
-    let created_dir = create_dl_dir();
+    let created_dir = create_dl_dir(output_dir);
     if created_dir {
         info!("Created a ./dl/ directory for all the downloaded files.")
     }
     let total = sum_posts(&data);
     info!("Downloading {} posts...", total);
+    let bar = new_progress_bar(mp, total as u64);
     let mut full_sum = 0.0;
     let mut finished: i64 = 0;
     let mut failed: i64 = 0;
+    let chunk_size = context.num_threads as i32;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
         .build()
         .unwrap();
     for posts in data {
-        let sliced_data = slice_posts(api_defs::Posts { posts }, 5);
+        let sliced_data = slice_posts(api_defs::Posts { posts }, chunk_size);
         let (tx, rx) = channel::<Vec<DownloadFinished>>();
+        let bar = bar.clone();
         // Multi-threaded implementation.
         pool.install(|| {
             debug!("Starting download of {} posts.", sliced_data.len());
@@ -70,7 +103,11 @@ pub fn download_favourites(
                 .into_par_iter()
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
-                    funcs::download(login, posts.to_vec(), None, low_quality)
+                    let count = posts.len() as u64;
+                    let result =
+                        funcs::download(&client, login, posts.to_vec(), None, low_quality, output_dir);
+                    bar.inc(count);
+                    result
                 })
                 .collect();
 
@@ -82,6 +119,7 @@ pub fn download_favourites(
             full_sum += status.amount;
         }
     }
+    bar.finish_with_message("Done!");
     DownloadStatistics {
         completed: finished,
         failed,
@@ -90,12 +128,21 @@ pub fn download_favourites(
     }
 }
 
+/// Downloads posts matching a tag search into `output_dir`. Behaves like
+/// [`download_favourites`] but searches by `tags` directly instead of a user's
+/// favourites. `context.pages == -1` fetches every page until the API returns an
+/// empty one, which for a broad tag search can mean the entire matching corpus —
+/// the CLI disallows that default for this specific command via
+/// [`crate::cli::validate_args`], but this function itself has no such guard.
+#[allow(clippy::too_many_arguments)]
 pub fn download_search(
     context: &CliContext,
     login: &Login,
     tags: &str,
     page_count: &u32,
     random: &bool,
+    mp: &MultiProgress,
+    output_dir: &Path,
 ) -> DownloadStatistics {
     let span = span!(Level::DEBUG, "DTags");
     let _guard = span.enter();
@@ -107,28 +154,31 @@ pub fn download_search(
     let fav = "";
     info!("Getting posts from pages!");
     let data: Vec<Vec<Post>> =
-        get_pages(context, login, client, fav, tags, random_check, page_count);
+        get_pages(context, login, &client, fav, tags, random_check, page_count);
     if data.is_empty() {
         error!("No posts found...");
         return DownloadStatistics::default();
     }
-    let created_dir = create_dl_dir();
+    let created_dir = create_dl_dir(output_dir);
     if created_dir {
         info!("Created a ./dl/ directory for all the downloaded files.")
     }
     let total = sum_posts(&data);
     info!("Downloading {} posts...", total);
+    let bar = new_progress_bar(mp, total as u64);
     let mut full_sum = 0.0;
     let mut finished: i64 = 0;
     let mut failed: i64 = 0;
+    let chunk_size = context.num_threads as i32;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
         .build()
         .unwrap();
     for posts in data {
-        let sliced_data = slice_posts(api_defs::Posts { posts }, 5);
+        let sliced_data = slice_posts(api_defs::Posts { posts }, chunk_size);
 
         let (tx, rx) = channel::<Vec<DownloadFinished>>();
+        let bar = bar.clone();
 
         // Multi-threaded implementation.
         pool.install(|| {
@@ -136,7 +186,11 @@ pub fn download_search(
                 .into_par_iter()
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
-                    funcs::download(login, posts.to_vec(), None, low_quality)
+                    let count = posts.len() as u64;
+                    let result =
+                        funcs::download(&client, login, posts.to_vec(), None, low_quality, output_dir);
+                    bar.inc(count);
+                    result
                 })
                 .collect();
 
@@ -148,6 +202,7 @@ pub fn download_search(
             full_sum += status.amount;
         }
     }
+    bar.finish_with_message("Done!");
     DownloadStatistics {
         completed: finished,
         failed,
@@ -156,19 +211,25 @@ pub fn download_search(
     }
 }
 
+/// Downloads every post in the pool identified by `pool_id` into `output_dir`,
+/// with each file named `{0001, 0002, ...}-{artist}-{post_id}.{ext}` so the pool's
+/// original order is preserved regardless of parallel download order (index
+/// zero-padded to 4 digits, matching pool page ordering — important for archive
+/// readers, see [`zip_downloads`]). Returns
+/// [`DownloadStatistics::default`] if the pool doesn't exist or has no posts.
 pub fn download_pool(
     context: &CliContext,
     login: &Login,
     pool_id: &u64,
-    zip: bool,
-    cbz: bool,
+    mp: &MultiProgress,
+    output_dir: &Path,
 ) -> DownloadStatistics {
     let span = span!(Level::DEBUG, "DPool");
     let _guard = span.enter();
 
     let client = get_client();
     if let Some(data) = get_pool(context, &client, login, pool_id) {
-        let created_dir = create_dl_dir();
+        let created_dir = create_dl_dir(output_dir);
         if created_dir {
             info!("Created a ./dl/ directory for all the downloaded files.")
         }
@@ -193,42 +254,53 @@ pub fn download_pool(
         info!("Downloading {} posts...", data.post_ids.len());
         let mut posts_sorted = posts_indexed.into_iter().collect::<Vec<_>>();
         posts_sorted.sort_by(|a, b| a.0.cmp(&b.0));
+        let bar = new_progress_bar(mp, posts_sorted.len() as u64);
         let mut full_sum = 0.0;
         let mut finished: i64 = 0;
         let mut failed: i64 = 0;
+        let chunk_size = context.num_threads as i32;
+        let sliced_posts = slice_pool_posts(posts_sorted, chunk_size);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(context.num_threads)
             .build()
             .unwrap();
-        for post in posts_sorted {
-            let (tx, rx) = channel::<DownloadFinished>();
+        let (tx, rx) = channel::<Vec<DownloadFinished>>();
+        let bar_clone = bar.clone();
+        pool.install(|| {
+            let dl_sizes: Vec<DownloadFinished> = sliced_posts
+                .into_par_iter()
+                .map(|chunk| {
+                    let mut sum = DownloadFinished {
+                        amount_finished: 0,
+                        amount_failed: 0,
+                        amount: 0.0,
+                    };
+                    for (index, post) in chunk {
+                        let result = funcs::download(
+                            &client,
+                            login,
+                            vec![post],
+                            Some(&index),
+                            &context.lower_quality,
+                            output_dir,
+                        );
+                        sum.amount_finished += result.amount_finished;
+                        sum.amount_failed += result.amount_failed;
+                        sum.amount += result.amount;
+                        bar_clone.inc(1);
+                    }
+                    sum
+                })
+                .collect();
 
-            pool.install(|| {
-                let dl_size: DownloadFinished =
-                    funcs::download(login, vec![post.1], Some(&post.0), &context.lower_quality);
-
-                tx.send(dl_size).unwrap();
-            });
-            let status = rx.recv().unwrap();
-
+            tx.send(dl_sizes).unwrap();
+        });
+        for status in rx.recv().unwrap() {
             finished += status.amount_finished;
             failed += status.amount_failed;
             full_sum += status.amount;
         }
-
-        if zip && cbz {
-            let p_name = data.name.replace("/", "");
-            let mut zip = Command::new("7z");
-            zip.arg("a").arg(format!("{}.zip", p_name)).arg("./dl/*");
-            zip.output().unwrap();
-            
-            fs::rename(format!("./{}.zip", p_name), format!("./{}.cbz", p_name.replace("_", " "))).unwrap();
-        } else if zip {
-            let p_name = data.name.replace("/", "");
-            let mut zip = Command::new("7z");
-            zip.arg("a").arg(format!("{}.zip", p_name)).arg("./dl/*");
-            zip.output().unwrap();
-        }
+        bar.finish_with_message("Done!");
 
         DownloadStatistics {
             completed: finished,
@@ -240,3 +312,67 @@ pub fn download_pool(
         DownloadStatistics::default()
     }
 }
+
+/// Packages the contents of `dir` (as produced by [`download_pool`]) into an
+/// archive named `{name}.{ext}` in the current working directory, where `ext`
+/// comes from [`ArchiveFormat::extension`]. Only meaningful for pool downloads,
+/// since the index-prefixed filenames are what makes a resulting cbz/zip
+/// readable in order. Shells out to the `7z` executable, which must be on
+/// `PATH`. Returns `false` (and logs the reason) if `dir` doesn't exist or `7z`
+/// fails/isn't found; `name` is sanitized by stripping `/` before use.
+pub fn zip_downloads(dir: &Path, name: &str, format: ArchiveFormat) -> bool {
+    if !dir.exists() {
+        error!(
+            "Nothing to zip! The {} folder doesn't exist. Run d-pool first.",
+            dir.display()
+        );
+        return false;
+    }
+
+    let safe_name = name.replace("/", "");
+    let ok = match format {
+        ArchiveFormat::Zip => run_7z(dir, &safe_name, "zip", "zip"),
+        ArchiveFormat::SevenZip => run_7z(dir, &safe_name, "7z", "7z"),
+        ArchiveFormat::Cbz => {
+            run_7z(dir, &safe_name, "zip", "zip")
+                && fs::rename(
+                    format!("./{safe_name}.zip"),
+                    format!("./{safe_name}.cbz"),
+                )
+                .map_err(|e| error!("Failed to rename archive to .cbz: {e}"))
+                .is_ok()
+        }
+    };
+
+    if ok {
+        info!("Packaged {} into '{safe_name}.{}'.", dir.display(), format.extension());
+    }
+    ok
+}
+
+fn run_7z(dir: &Path, name: &str, archive_type: &str, ext: &str) -> bool {
+    let mut cmd = Command::new("7z");
+    cmd.arg("a")
+        .arg(format!("-t{archive_type}"))
+        .arg(format!("{name}.{ext}"))
+        .arg(dir.join("*"));
+
+    match cmd.output() {
+        Ok(out) if out.status.success() => true,
+        Ok(out) => {
+            error!(
+                "7z exited with an error: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            false
+        }
+        Err(e) => {
+            error!("Failed to run 7z (is it installed and on PATH?): {e}");
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "commands_tests.rs"]
+mod tests;
