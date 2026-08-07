@@ -1,4 +1,5 @@
 use super::*;
+use crate::tracker::Tracker;
 use crate::type_defs::api_defs::{Alternates, File as ApiFile, Sample, Tags};
 
 fn dummy_post(id: u64) -> Post {
@@ -113,9 +114,66 @@ fn download_skips_already_downloaded_file() {
         api_key: String::new(),
     };
 
-    let result = download(&client, &login, vec![post], None, &false, dir.path());
+    let result = download(&client, &login, vec![post], None, &false, dir.path(), None);
 
     assert_eq!(result.amount_finished, 0);
     assert_eq!(result.amount_failed, 0);
     assert_eq!(result.amount, 0.0);
+}
+
+#[test]
+fn download_skips_tracked_post() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let tracker = Tracker::load(&dir.path().join("tracked.txt")).expect("tracker");
+    tracker.insert(123);
+    let post = dummy_post(123);
+
+    let client = crate::commands::get_client();
+    let login = Login {
+        username: String::new(),
+        api_key: String::new(),
+    };
+
+    let result = download(
+        &client,
+        &login,
+        vec![post],
+        None,
+        &false,
+        dir.path(),
+        Some(&tracker),
+    );
+
+    assert_eq!(result.amount_finished, 0);
+    assert_eq!(result.amount_failed, 0);
+    assert_eq!(result.amount_skipped, 1);
+    assert!(!dir.path().join("someartist-123.jpg").exists());
+}
+
+#[test]
+fn download_records_existing_file_in_tracker() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let tracker = Tracker::load(&dir.path().join("tracked.txt")).expect("tracker");
+    let post = dummy_post(123);
+
+    std::fs::write(dir.path().join("someartist-123.jpg"), b"existing").expect("write");
+
+    let client = crate::commands::get_client();
+    let login = Login {
+        username: String::new(),
+        api_key: String::new(),
+    };
+
+    let result = download(
+        &client,
+        &login,
+        vec![post],
+        None,
+        &false,
+        dir.path(),
+        Some(&tracker),
+    );
+
+    assert_eq!(result.amount_skipped, 1);
+    assert!(tracker.contains(123));
 }

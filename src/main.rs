@@ -7,17 +7,16 @@ use std::{
 
 use clap::Parser;
 use e_cli::{
-    CliContext, DownloadStatistics, Login,
+    CliContext, DownloadStatistics, Login, Tracker,
     cli::{self, Commands},
     commands::{self, download_favourites, download_pool, download_search},
+    funcs,
 };
 use indicatif::MultiProgress;
 use tracing::{Level, error, info, span};
 use tracing_subscriber::{
     EnvFilter, Layer, fmt, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
 };
-
-pub const DL_DIR: &str = "./dl/";
 
 /// A `tracing` writer that suspends any active `indicatif` progress bars
 /// while a log line is written, so bar rendering doesn't get clobbered.
@@ -122,13 +121,40 @@ fn main() {
     }
     let login = Login { username, api_key };
 
+    let dl_dir = Path::new(&args.dir);
+
+    // Create the download directory up front (before the tracking file is
+    // opened), since users commonly keep the tracking file inside the
+    // download directory or next to it.
+    if matches!(
+        &args.command,
+        Some(Commands::DFavs { .. } | Commands::DTags { .. } | Commands::DPool { .. })
+    ) && funcs::create_dl_dir(dl_dir)
+    {
+        info!(
+            "Created a {} directory for all the downloaded files.",
+            dl_dir.display()
+        );
+    }
+
+    let tracker = match &args.track_file {
+        Some(path) => match Tracker::load(path) {
+            Ok(t) => {
+                info!("Tracking downloaded posts in {}.", path.display());
+                Some(t)
+            }
+            Err(e) => {
+                return error!("Failed to open tracking file {}: {e}", path.display());
+            }
+        },
+        None => None,
+    };
+
     #[allow(unused_mut)]
     let mut download_stats;
     let fn_start = Instant::now();
     let span = span!(Level::DEBUG, "main");
     let _guard = span.enter();
-
-    let dl_dir = Path::new(DL_DIR);
 
     match &args.command {
         Some(Commands::ClearDl) => {
@@ -137,7 +163,10 @@ fn main() {
             }
 
             fs::remove_dir_all(dl_dir).expect("Err");
-            return info!("Cleaned the ./dl/ folder and also deleted the folder fully!");
+            return info!(
+                "Cleaned the {} folder and also deleted the folder fully!",
+                dl_dir.display()
+            );
         }
         Some(Commands::DFavs {
             username,
@@ -145,22 +174,41 @@ fn main() {
             random,
             tags,
         }) => {
-            download_stats =
-                download_favourites(&context, &login, username, count, random, tags, &mp, dl_dir);
+            download_stats = download_favourites(
+                &context,
+                &login,
+                username,
+                count,
+                random,
+                tags,
+                &mp,
+                dl_dir,
+                tracker.as_ref(),
+            );
         }
         Some(Commands::DTags {
             tags,
             count,
             random,
         }) => {
-            download_stats = download_search(&context, &login, tags, count, random, &mp, dl_dir);
+            download_stats = download_search(
+                &context,
+                &login,
+                tags,
+                count,
+                random,
+                &mp,
+                dl_dir,
+                tracker.as_ref(),
+            );
         }
         Some(Commands::DPool { pool_id }) => {
-            download_stats = download_pool(&context, &login, pool_id, &mp, dl_dir);
+            download_stats =
+                download_pool(&context, &login, pool_id, &mp, dl_dir, tracker.as_ref());
         }
         Some(Commands::Zip { name, format }) => {
             if !commands::zip_downloads(dl_dir, name, *format) {
-                error!("Failed to package ./dl/ into an archive.");
+                error!("Failed to package {} into an archive.", dl_dir.display());
             }
             return;
         }
@@ -172,8 +220,9 @@ fn main() {
 
 fn finish(statistics: DownloadStatistics, timer: Instant) {
     info!(
-        "Finished! Downloaded: {} Posts. Couldn't Download: {} Posts. Total data downloaded: {:.2} MB, in {} seconds.",
+        "Finished! Downloaded: {} Posts. Skipped: {} already-downloaded Posts. Couldn't Download: {} Posts. Total data downloaded: {:.2} MB, in {} seconds.",
         statistics.completed,
+        statistics.skipped,
         statistics.failed,
         statistics.downloaded_amount / 1024.0 / 1024.0,
         timer.elapsed().as_secs(),

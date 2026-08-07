@@ -12,6 +12,40 @@ fn defaults() {
     assert_eq!(args.api_source, "e926.net");
     assert_eq!(args.pages, -1);
     assert_eq!(args.num_threads, 5);
+    assert_eq!(args.dir, "./dl/");
+}
+
+#[test]
+fn dir_defaults_to_dl_dir_const() {
+    let args = parse(&["d-pool", "1"]);
+    assert_eq!(args.dir, DL_DIR);
+}
+
+#[test]
+fn dir_accepts_custom_value() {
+    let args = parse(&["-d", "./custom/", "d-pool", "1"]);
+    assert_eq!(args.dir, "./custom/");
+
+    let args = parse(&["d-pool", "1", "--dir", "D:\\downloads"]);
+    assert_eq!(args.dir, "D:\\downloads");
+}
+
+#[test]
+fn track_file_defaults_to_none() {
+    let args = parse(&["d-pool", "1"]);
+    assert_eq!(args.track_file, None);
+}
+
+#[test]
+fn track_file_accepts_custom_value() {
+    let args = parse(&["-T", "seen.txt", "d-pool", "1"]);
+    assert_eq!(args.track_file, Some(std::path::PathBuf::from("seen.txt")));
+
+    let args = parse(&["d-pool", "1", "--track-file", "history.txt"]);
+    assert_eq!(
+        args.track_file,
+        Some(std::path::PathBuf::from("history.txt"))
+    );
 }
 
 #[test]

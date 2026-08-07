@@ -1,4 +1,9 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand, ValueEnum};
+
+/// Default directory that downloads, `zip`, and `clear-dl` operate on.
+pub const DL_DIR: &str = "./dl/";
 
 #[derive(Parser)]
 #[command(about = "A fast, multi-threaded downloader for e926/e621-style booru APIs.")]
@@ -10,6 +15,8 @@ use clap::{Parser, Subcommand, ValueEnum};
     e-cli d-tags \"scalie\" -c 250 -r -p 1        Download 250 random posts tagged 'scalie', 1 page\n  \
     e-cli d-favs someuser -c 100                 Download 100 favorites from 'someuser'\n  \
     e-cli d-pool 22364                           Download a pool into ./dl/\n  \
+    e-cli d-pool 22364 -d ./pool/                Download a pool into ./pool/\n  \
+    e-cli d-favs someuser -c 100 -T seen.txt     Download favorites, skipping posts tracked in seen.txt\n  \
     e-cli zip -n Cloudjumping -f cbz             Package ./dl/ into Cloudjumping.cbz\n  \
     e-cli clear-dl                               Delete the ./dl/ output directory")]
 pub struct Args {
@@ -33,11 +40,17 @@ pub struct Args {
 
     #[arg[short = 't', long, help = "The number of threads to use for downloads. Cannot set above 10.", default_value_t = 5]]
     pub num_threads: usize,
+
+    #[arg[short = 'd', long, global = true, help = "The directory to download files into (also used by zip and clear-dl).", default_value = DL_DIR]]
+    pub dir: String,
+
+    #[arg[short = 'T', long, global = true, help = "Path to a tracking file that records downloaded post IDs, so re-runs only download new posts. Created if it doesn't exist."]]
+    pub track_file: Option<PathBuf>,
 }
 
 #[derive(Subcommand, PartialEq, Eq)]
 pub enum Commands {
-    #[command[about = "Deletes the whole ./dl/ directory with it's contents."]]
+    #[command[about = "Deletes the whole download directory (./dl/ by default, see -d) with it's contents."]]
     ClearDl,
     #[command[about = "Downloads the set amount of favourites from the username provided."]]
     DFavs {

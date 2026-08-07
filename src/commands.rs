@@ -15,6 +15,7 @@ use crate::funcs::{
     self, DownloadFinished, create_dl_dir, get_pages, get_pool, get_post_data, slice_pool_posts,
     slice_posts, sum_posts,
 };
+use crate::tracker::Tracker;
 use crate::type_defs::api_defs::{self, Post};
 use crate::{AGENT, CliContext, DownloadStatistics, Login};
 
@@ -47,10 +48,11 @@ fn new_progress_bar(mp: &MultiProgress, total: u64) -> ProgressBar {
 /// are downloaded in parallel chunks sized by `context.num_threads`.
 ///
 /// `mp` receives one progress bar tracking overall files completed/total; `count`
-/// is the API page size (posts per request), not a total cap. Files that already
-/// exist in `output_dir` are skipped and counted toward neither `completed` nor
-/// `failed`. Returns [`DownloadStatistics::default`] (all zero) if no posts were
-/// found for the given favourites/tags.
+/// is the API page size (posts per request), not a total cap. Posts already
+/// downloaded are skipped and counted in [`DownloadStatistics::skipped`]: either
+/// recorded in `tracker` (if `Some`), or their file already exists in
+/// `output_dir`. Returns [`DownloadStatistics::default`] (all zero) if no posts
+/// were found for the given favourites/tags.
 #[allow(clippy::too_many_arguments)]
 pub fn download_favourites(
     context: &CliContext,
@@ -61,11 +63,15 @@ pub fn download_favourites(
     tags: &str,
     mp: &MultiProgress,
     output_dir: &Path,
+    tracker: Option<&Tracker>,
 ) -> DownloadStatistics {
     let span = span!(Level::DEBUG, "DFavs");
     let _guard = span.enter();
 
-    info!("Downloading Favorites of {username} into the ./dl/ folder!");
+    info!(
+        "Downloading Favorites of {username} into the {} folder!",
+        output_dir.display()
+    );
     let client = get_client();
     let random_check: &str = if *random { "order:random" } else { "" };
     let tags: &str = if !tags.is_empty() { tags } else { "" };
@@ -79,7 +85,10 @@ pub fn download_favourites(
     }
     let created_dir = create_dl_dir(output_dir);
     if created_dir {
-        info!("Created a ./dl/ directory for all the downloaded files.")
+        info!(
+            "Created a {} directory for all the downloaded files.",
+            output_dir.display()
+        )
     }
     let total = sum_posts(&data);
     info!("Downloading {} posts...", total);
@@ -87,6 +96,7 @@ pub fn download_favourites(
     let mut full_sum = 0.0;
     let mut finished: i64 = 0;
     let mut failed: i64 = 0;
+    let mut skipped: i64 = 0;
     let chunk_size = context.num_threads as i32;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
@@ -104,8 +114,15 @@ pub fn download_favourites(
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
                     let count = posts.len() as u64;
-                    let result =
-                        funcs::download(&client, login, posts.to_vec(), None, low_quality, output_dir);
+                    let result = funcs::download(
+                        &client,
+                        login,
+                        posts.to_vec(),
+                        None,
+                        low_quality,
+                        output_dir,
+                        tracker,
+                    );
                     bar.inc(count);
                     result
                 })
@@ -116,6 +133,7 @@ pub fn download_favourites(
         for status in rx.recv().unwrap() {
             finished += status.amount_finished;
             failed += status.amount_failed;
+            skipped += status.amount_skipped;
             full_sum += status.amount;
         }
     }
@@ -123,6 +141,7 @@ pub fn download_favourites(
     DownloadStatistics {
         completed: finished,
         failed,
+        skipped,
         total,
         downloaded_amount: full_sum,
     }
@@ -143,11 +162,15 @@ pub fn download_search(
     random: &bool,
     mp: &MultiProgress,
     output_dir: &Path,
+    tracker: Option<&Tracker>,
 ) -> DownloadStatistics {
     let span = span!(Level::DEBUG, "DTags");
     let _guard = span.enter();
 
-    info!("Downloading posts, with '{tags}' tag/s, into the ./dl/ folder!");
+    info!(
+        "Downloading posts, with '{tags}' tag/s, into the {} folder!",
+        output_dir.display()
+    );
     let client = get_client();
     let random_check: &str = if *random { "order:random" } else { "" };
     let tags: &str = if !tags.is_empty() { tags } else { "" };
@@ -161,7 +184,10 @@ pub fn download_search(
     }
     let created_dir = create_dl_dir(output_dir);
     if created_dir {
-        info!("Created a ./dl/ directory for all the downloaded files.")
+        info!(
+            "Created a {} directory for all the downloaded files.",
+            output_dir.display()
+        )
     }
     let total = sum_posts(&data);
     info!("Downloading {} posts...", total);
@@ -169,6 +195,7 @@ pub fn download_search(
     let mut full_sum = 0.0;
     let mut finished: i64 = 0;
     let mut failed: i64 = 0;
+    let mut skipped: i64 = 0;
     let chunk_size = context.num_threads as i32;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
@@ -187,8 +214,15 @@ pub fn download_search(
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
                     let count = posts.len() as u64;
-                    let result =
-                        funcs::download(&client, login, posts.to_vec(), None, low_quality, output_dir);
+                    let result = funcs::download(
+                        &client,
+                        login,
+                        posts.to_vec(),
+                        None,
+                        low_quality,
+                        output_dir,
+                        tracker,
+                    );
                     bar.inc(count);
                     result
                 })
@@ -199,6 +233,7 @@ pub fn download_search(
         for status in rx.recv().unwrap() {
             finished += status.amount_finished;
             failed += status.amount_failed;
+            skipped += status.amount_skipped;
             full_sum += status.amount;
         }
     }
@@ -206,6 +241,7 @@ pub fn download_search(
     DownloadStatistics {
         completed: finished,
         failed,
+        skipped,
         total,
         downloaded_amount: full_sum,
     }
@@ -223,6 +259,7 @@ pub fn download_pool(
     pool_id: &u64,
     mp: &MultiProgress,
     output_dir: &Path,
+    tracker: Option<&Tracker>,
 ) -> DownloadStatistics {
     let span = span!(Level::DEBUG, "DPool");
     let _guard = span.enter();
@@ -231,9 +268,15 @@ pub fn download_pool(
     if let Some(data) = get_pool(context, &client, login, pool_id) {
         let created_dir = create_dl_dir(output_dir);
         if created_dir {
-            info!("Created a ./dl/ directory for all the downloaded files.")
+            info!(
+                "Created a {} directory for all the downloaded files.",
+                output_dir.display()
+            )
         }
-        info!("Downloading pool with id '{pool_id}' into the ./dl/ folder!");
+        info!(
+            "Downloading pool with id '{pool_id}' into the {} folder!",
+            output_dir.display()
+        );
         let mut posts_indexed: HashMap<u64, Post> = HashMap::new();
         let posts = get_post_data(context, &client, login, &data.post_ids);
         if posts.is_empty() {
@@ -258,6 +301,7 @@ pub fn download_pool(
         let mut full_sum = 0.0;
         let mut finished: i64 = 0;
         let mut failed: i64 = 0;
+        let mut skipped: i64 = 0;
         let chunk_size = context.num_threads as i32;
         let sliced_posts = slice_pool_posts(posts_sorted, chunk_size);
         let pool = rayon::ThreadPoolBuilder::new()
@@ -273,6 +317,7 @@ pub fn download_pool(
                     let mut sum = DownloadFinished {
                         amount_finished: 0,
                         amount_failed: 0,
+                        amount_skipped: 0,
                         amount: 0.0,
                     };
                     for (index, post) in chunk {
@@ -283,9 +328,11 @@ pub fn download_pool(
                             Some(&index),
                             &context.lower_quality,
                             output_dir,
+                            tracker,
                         );
                         sum.amount_finished += result.amount_finished;
                         sum.amount_failed += result.amount_failed;
+                        sum.amount_skipped += result.amount_skipped;
                         sum.amount += result.amount;
                         bar_clone.inc(1);
                     }
@@ -298,6 +345,7 @@ pub fn download_pool(
         for status in rx.recv().unwrap() {
             finished += status.amount_finished;
             failed += status.amount_failed;
+            skipped += status.amount_skipped;
             full_sum += status.amount;
         }
         bar.finish_with_message("Done!");
@@ -305,6 +353,7 @@ pub fn download_pool(
         DownloadStatistics {
             completed: finished,
             failed,
+            skipped,
             total: data.post_ids.len(),
             downloaded_amount: full_sum,
         }

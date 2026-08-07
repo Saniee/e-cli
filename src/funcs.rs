@@ -6,6 +6,7 @@ use std::{fs::create_dir_all, io::Write};
 use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
 
+use crate::tracker::Tracker;
 use crate::type_defs::api_defs::{PoolData, Post, Posts};
 use crate::{CliContext, Login};
 
@@ -35,18 +36,22 @@ pub struct DownloadStatus {
 pub struct DownloadFinished {
     pub amount_finished: i64,
     pub amount_failed: i64,
+    pub amount_skipped: i64,
     pub amount: f64,
 }
 
-/// Downloads a batch of posts into `output_dir`, skipping (and logging a warning
-/// for) any post whose target file already exists on disk.
+/// Downloads a batch of posts into `output_dir`, skipping (and counting in
+/// [`DownloadFinished::amount_skipped`]) any post that is already downloaded:
+/// either recorded in `tracker` (if `Some`), or whose target file already
+/// exists on disk (which is then also recorded in `tracker`, so future runs
+/// skip it without touching the filesystem).
 ///
 /// `index` is applied to *every* post in `data` as a shared filename prefix (or
 /// `None` for no prefix) — for per-post distinct indexes (as pool downloads need),
 /// call this once per post with that post's own index rather than passing a
 /// multi-post batch. If `lower_quality` is true, [`lower_quality_dl_file`] is used
 /// instead of the full-resolution [`download_file`] where a sample/lower-quality
-/// variant is available.
+/// variant is available. Successfully downloaded posts are recorded in `tracker`.
 #[allow(clippy::too_many_arguments)]
 pub fn download(
     client: &Client,
@@ -55,6 +60,7 @@ pub fn download(
     index: Option<&u64>,
     lower_quality: &bool,
     output_dir: &Path,
+    tracker: Option<&Tracker>,
 ) -> DownloadFinished {
     let span = span!(Level::DEBUG, "download_handler");
     let _guard = span.enter();
@@ -62,9 +68,21 @@ pub fn download(
     let mut downloaded_bytes = 0.0;
     let mut amount_finished = 0;
     let mut amount_failed = 0;
+    let mut amount_skipped = 0;
 
     for post in data {
         let artist_name = post.tags.parse_artists();
+
+        if let Some(tracker) = tracker
+            && tracker.contains(post.id)
+        {
+            debug!(
+                "Post {}-{} already tracked, skipping.",
+                artist_name, post.id
+            );
+            amount_skipped += 1;
+            continue;
+        }
 
         let path = output_dir.join(file_name(index, &artist_name, post.id, &post.file.ext));
 
@@ -73,6 +91,10 @@ pub fn download(
                 "File {}-{}.{} already Exists!",
                 artist_name, post.id, post.file.ext
             );
+            if let Some(tracker) = tracker {
+                tracker.insert(post.id);
+            }
+            amount_skipped += 1;
             continue;
         }
 
@@ -81,6 +103,9 @@ pub fn download(
             if stat.finished {
                 downloaded_bytes += stat.downloaded_bytes;
                 amount_finished += 1;
+                if let Some(tracker) = tracker {
+                    tracker.insert(post.id);
+                }
                 info!(
                     "Downloaded {}-{}.{}! File size: {:.2} MB",
                     artist_name,
@@ -108,6 +133,9 @@ pub fn download(
                     if stat.finished {
                         downloaded_bytes += stat.downloaded_bytes;
                         amount_finished += 1;
+                        if let Some(tracker) = tracker {
+                            tracker.insert(post.id);
+                        }
                         info!(
                             "Downloaded {}-{}.{}! File size: {:.2} MB",
                             artist_name,
@@ -134,6 +162,7 @@ pub fn download(
     DownloadFinished {
         amount_finished,
         amount_failed,
+        amount_skipped,
         amount: downloaded_bytes,
     }
 }

@@ -3,15 +3,20 @@
 //! package a downloaded pool into an archive.
 //!
 //! The binary (`src/main.rs`) is a thin CLI wrapper around this crate — everything
-//! here is usable directly by another Rust program (e.g. a backend service) without
-//! going through a subprocess. Start with [`commands`] for the high-level operations
-//! (`download_favourites`, `download_search`, `download_pool`, `zip_downloads`);
-//! [`funcs`] holds the lower-level HTTP/filesystem building blocks those are made of.
+//! here is usable directly by another Rust program (e.g. a backend service or GUI)
+//! without going through a subprocess. Start with [`commands`] for the high-level
+//! operations (`download_favourites`, `download_search`, `download_pool`,
+//! `zip_downloads`); [`funcs`] holds the lower-level HTTP/filesystem building
+//! blocks those are made of, and [`tracker`] the optional record of
+//! already-downloaded posts.
 
 pub mod cli;
 pub mod commands;
 pub mod funcs;
+pub mod tracker;
 pub mod type_defs;
+
+pub use tracker::Tracker;
 
 /// The `User-Agent` header sent with every HTTP request, e.g. `e-cli/0.4.3`.
 pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -25,8 +30,11 @@ pub struct DownloadStatistics {
     pub completed: i64,
     /// Number of posts that failed to download (or were missing a file URL).
     pub failed: i64,
-    /// Total number of posts considered (`completed + failed`, plus any skipped
-    /// because a matching file already existed on disk).
+    /// Number of posts skipped because they were already downloaded — either
+    /// the target file already existed on disk, or the post was recorded in
+    /// the tracking file (see [`tracker::Tracker`]).
+    pub skipped: i64,
+    /// Total number of posts considered (`completed + failed + skipped`).
     pub total: usize,
     /// Total bytes written across all successfully downloaded files.
     pub downloaded_amount: f64,

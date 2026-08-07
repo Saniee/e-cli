@@ -16,10 +16,11 @@ It aims to be:
 - [x] Packaging a downloaded pool into a `.zip`, `.7z`, or `.cbz` archive.
 - [x] Optional authenticated login for better-quality fetching.
 - [x] Live progress bars for downloads.
+- [x] Optional tracking file (`-T`) that records downloaded post IDs, so re-runs only fetch new posts.
 
-## What it can't do
-
-* Have a fully fledged UI.
+## What it isn't.
+### A fully GUI App. However that is here (thanks to the rust lib):
+[GUI App](https://github.com/Saniee/e-cli-gui)
 
 ## Usage
 
@@ -27,6 +28,8 @@ It aims to be:
 e-cli d-tags "scalie" -c 250 -r -p 1        Download 250 random posts tagged 'scalie', 1 page
 e-cli d-favs someuser -c 100                Download 100 favorites from 'someuser'
 e-cli d-pool 22364                          Download a pool into ./dl/
+e-cli d-pool 22364 -d ./pool/               Download a pool into ./pool/
+e-cli d-favs someuser -c 100 -T seen.txt    Download favorites, skipping posts tracked in seen.txt
 e-cli zip -n Cloudjumping -f cbz            Package ./dl/ into Cloudjumping.cbz
 e-cli clear-dl                              Delete the ./dl/ output directory
 ```
@@ -46,5 +49,3 @@ cargo build --release
 ```
 cargo test
 ```
-
-Runs the unit test suite (no network access required). The `.ps1` scripts in the repo root are manual smoke tests that exercise the CLI against the live e621/e926 API.
