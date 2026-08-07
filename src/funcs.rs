@@ -275,6 +275,25 @@ pub fn create_dl_dir(dir: &Path) -> bool {
     }
 }
 
+/// Ensures `dir` exists, creating it (and any missing parent directories) if
+/// it doesn't. Returns `true` if the directory was created, `false` if it
+/// already existed, and logs an informational message when it creates it.
+///
+/// This is the directory-creation helper meant for higher-level callers — the
+/// CLI ensures the download directory before opening a tracking file (so a
+/// tracker kept inside or next to the directory works), and external consumers
+/// like a GUI can call it the same way before starting a download.
+pub fn ensure_dl_dir(dir: &Path) -> bool {
+    let created = create_dl_dir(dir);
+    if created {
+        info!(
+            "Created a {} directory for all the downloaded files.",
+            dir.display()
+        );
+    }
+    created
+}
+
 /// Splits `arr.posts` into chunks of at most `chunk_size` — the unit of work
 /// handed to each parallel download task in [`crate::commands`]. Panics if
 /// `chunk_size <= 0` (see `[T]::chunks`); callers should validate thread/chunk

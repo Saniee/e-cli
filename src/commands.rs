@@ -12,7 +12,7 @@ use tracing::{Level, debug, error, info, span};
 
 use crate::cli::ArchiveFormat;
 use crate::funcs::{
-    self, DownloadFinished, create_dl_dir, get_pages, get_pool, get_post_data, slice_pool_posts,
+    self, DownloadFinished, ensure_dl_dir, get_pages, get_pool, get_post_data, slice_pool_posts,
     slice_posts, sum_posts,
 };
 use crate::tracker::Tracker;
@@ -83,13 +83,7 @@ pub fn download_favourites(
         error!("No posts found...");
         return DownloadStatistics::default();
     }
-    let created_dir = create_dl_dir(output_dir);
-    if created_dir {
-        info!(
-            "Created a {} directory for all the downloaded files.",
-            output_dir.display()
-        )
-    }
+    ensure_dl_dir(output_dir);
     let total = sum_posts(&data);
     info!("Downloading {} posts...", total);
     let bar = new_progress_bar(mp, total as u64);
@@ -182,13 +176,7 @@ pub fn download_search(
         error!("No posts found...");
         return DownloadStatistics::default();
     }
-    let created_dir = create_dl_dir(output_dir);
-    if created_dir {
-        info!(
-            "Created a {} directory for all the downloaded files.",
-            output_dir.display()
-        )
-    }
+    ensure_dl_dir(output_dir);
     let total = sum_posts(&data);
     info!("Downloading {} posts...", total);
     let bar = new_progress_bar(mp, total as u64);
@@ -266,13 +254,7 @@ pub fn download_pool(
 
     let client = get_client();
     if let Some(data) = get_pool(context, &client, login, pool_id) {
-        let created_dir = create_dl_dir(output_dir);
-        if created_dir {
-            info!(
-                "Created a {} directory for all the downloaded files.",
-                output_dir.display()
-            )
-        }
+        ensure_dl_dir(output_dir);
         info!(
             "Downloading pool with id '{pool_id}' into the {} folder!",
             output_dir.display()

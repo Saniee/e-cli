@@ -129,12 +129,8 @@ fn main() {
     if matches!(
         &args.command,
         Some(Commands::DFavs { .. } | Commands::DTags { .. } | Commands::DPool { .. })
-    ) && funcs::create_dl_dir(dl_dir)
-    {
-        info!(
-            "Created a {} directory for all the downloaded files.",
-            dl_dir.display()
-        );
+    ) {
+        funcs::ensure_dl_dir(dl_dir);
     }
 
     let tracker = match &args.track_file {

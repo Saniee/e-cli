@@ -100,6 +100,19 @@ fn create_dl_dir_reports_first_creation_only() {
 }
 
 #[test]
+fn ensure_dl_dir_reports_first_creation_only() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let dir = base.path().join("nested").join("dl");
+
+    assert!(ensure_dl_dir(&dir), "should create the dir on first call");
+    assert!(dir.exists());
+    assert!(
+        !ensure_dl_dir(&dir),
+        "should report false when dir already exists"
+    );
+}
+
+#[test]
 fn download_skips_already_downloaded_file() {
     let dir = tempfile::tempdir().expect("tempdir");
     let post = dummy_post(123);
