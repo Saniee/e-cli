@@ -2,6 +2,7 @@ use std::{
     fs,
     io::{self, Write},
     path::Path,
+    process,
     time::Instant,
 };
 
@@ -10,6 +11,7 @@ use e_cli::{
     CliContext, DownloadStatistics, Login, Tracker,
     cli::{self, Commands},
     commands::{self, download_favourites, download_pool, download_search},
+    config,
     funcs,
 };
 use indicatif::MultiProgress;
@@ -42,18 +44,44 @@ impl<'a> MakeWriter<'a> for ProgressWriter {
 }
 
 fn main() {
-    let args = cli::Args::parse();
+    let mut args = cli::Args::parse();
 
-    if let Err(e) = cli::validate_args(&args) {
-        return error!("{e}");
+    if matches!(&args.command, Some(Commands::Config)) {
+        if let Err(e) = config::open() {
+            eprintln!("{e}");
+            process::exit(1);
+        }
+        return;
+    }
+
+    let config_path = match config::path() {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
+        }
+    };
+    let file_config = match config::load(&config_path) {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
+        }
+    };
+    if let Err(e) = cli::apply_config(&mut args, &file_config)
+        .and_then(|_| cli::fill_defaults(&mut args))
+        .and_then(|_| cli::validate_args(&args))
+    {
+        eprintln!("{e}");
+        return;
     }
 
     let context = CliContext {
         verbose: args.verbose,
-        api_source: args.api_source,
+        nsfw: args.nsfw,
         lower_quality: args.lower_quality,
-        pages: args.pages,
-        num_threads: args.num_threads,
+        pages: args.pages.unwrap_or(-1),
+        num_threads: args.num_threads.unwrap_or(5),
     };
     let mp = MultiProgress::new();
     let progress_writer = ProgressWriter(mp.clone());
@@ -103,7 +131,7 @@ fn main() {
         let resp = client
             .get(format!(
                 "https://{}/posts.json?tags=&limit=5",
-                context.api_source
+                context.api_source()
             ))
             .basic_auth(&username, Some(api_key.clone()))
             .send()
@@ -121,7 +149,7 @@ fn main() {
     }
     let login = Login { username, api_key };
 
-    let dl_dir = Path::new(&args.dir);
+    let dl_dir = Path::new(args.dir.as_deref().unwrap_or(cli::DL_DIR));
 
     // Create the download directory up front (before the tracking file is
     // opened), since users commonly keep the tracking file inside the
@@ -153,6 +181,7 @@ fn main() {
     let _guard = span.enter();
 
     match &args.command {
+        Some(Commands::Config) => return,
         Some(Commands::ClearDl) => {
             if !dl_dir.exists() {
                 return info!("Nothing to clean... Exiting!");
@@ -173,10 +202,10 @@ fn main() {
             download_stats = download_favourites(
                 &context,
                 &login,
-                username,
-                count,
+                username.as_deref().expect("validated username"),
+                &count.unwrap_or(5),
                 random,
-                tags,
+                tags.as_deref().unwrap_or_default(),
                 &mp,
                 dl_dir,
                 tracker.as_ref(),
@@ -190,8 +219,8 @@ fn main() {
             download_stats = download_search(
                 &context,
                 &login,
-                tags,
-                count,
+                tags.as_deref().expect("validated tags"),
+                &count.unwrap_or(5),
                 random,
                 &mp,
                 dl_dir,
@@ -200,10 +229,14 @@ fn main() {
         }
         Some(Commands::DPool { pool_id }) => {
             download_stats =
-                download_pool(&context, &login, pool_id, &mp, dl_dir, tracker.as_ref());
+                download_pool(&context, &login, &pool_id.expect("validated pool ID"), &mp, dl_dir, tracker.as_ref());
         }
         Some(Commands::Zip { name, format }) => {
-            if !commands::zip_downloads(dl_dir, name, *format) {
+            if !commands::zip_downloads(
+                dl_dir,
+                name.as_deref().expect("validated archive name"),
+                format.unwrap_or(cli::ArchiveFormat::Zip),
+            ) {
                 error!("Failed to package {} into an archive.", dl_dir.display());
             }
             return;

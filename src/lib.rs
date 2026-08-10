@@ -1,6 +1,6 @@
 //! Core library behind the `e-cli` binary: downloads posts from e926.net/e621.net
-//! (or a compatible booru-style API) by favorites, tag search, or pool, and can
-//! package a downloaded pool into an archive.
+//! by favorites, tag search, or pool, and can package a downloaded pool into an
+//! archive.
 //!
 //! The binary (`src/main.rs`) is a thin CLI wrapper around this crate — everything
 //! here is usable directly by another Rust program (e.g. a backend service or GUI)
@@ -12,6 +12,7 @@
 
 pub mod cli;
 pub mod commands;
+pub mod config;
 pub mod funcs;
 pub mod tracker;
 pub mod type_defs;
@@ -40,13 +41,14 @@ pub struct DownloadStatistics {
     pub downloaded_amount: f64,
 }
 
-/// Request-scoped settings shared by every download operation: which API to hit,
-/// how many pages/threads to use, and whether to prefer lower-quality media.
+/// Request-scoped settings shared by every download operation: which API variant
+/// to hit, how many pages/threads to use, and whether to prefer lower-quality media.
 pub struct CliContext {
     /// Whether verbose logging is enabled.
     pub verbose: bool,
-    /// The API host to query, e.g. `"e926.net"` or `"e621.net"` (no scheme).
-    pub api_source: String,
+    /// Whether to use the NSFW API (`e621.net`) instead of the SFW API
+    /// (`e926.net`).
+    pub nsfw: bool,
     /// If true, prefer a lower-quality/sample file over the full-resolution original.
     pub lower_quality: bool,
     /// Number of pages to fetch: `-1` means "all pages", `> 0` means that many pages.
@@ -54,6 +56,13 @@ pub struct CliContext {
     /// Number of threads to use for parallel downloads (expected to be `1..=10`;
     /// see [`cli::validate_args`] for the CLI-level bound).
     pub num_threads: usize,
+}
+
+impl CliContext {
+    /// Returns the API host selected by the SFW/NSFW toggle.
+    pub fn api_source(&self) -> &'static str {
+        if self.nsfw { "e621.net" } else { "e926.net" }
+    }
 }
 
 /// Optional API credentials. An empty `username`/`api_key` means unauthenticated

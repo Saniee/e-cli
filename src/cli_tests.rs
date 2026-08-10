@@ -9,25 +9,32 @@ fn parse(args: &[&str]) -> Args {
 #[test]
 fn defaults() {
     let args = parse(&["d-pool", "1"]);
-    assert_eq!(args.api_source, "e926.net");
-    assert_eq!(args.pages, -1);
-    assert_eq!(args.num_threads, 5);
-    assert_eq!(args.dir, "./dl/");
+    assert!(!args.nsfw);
+    assert_eq!(args.pages, None);
+    assert_eq!(args.num_threads, None);
+    assert_eq!(args.dir, None);
+}
+
+#[test]
+fn nsfw_toggle_parses() {
+    let args = parse(&["--nsfw", "d-pool", "1"]);
+    assert!(args.nsfw);
 }
 
 #[test]
 fn dir_defaults_to_dl_dir_const() {
-    let args = parse(&["d-pool", "1"]);
-    assert_eq!(args.dir, DL_DIR);
+    let mut args = parse(&["d-pool", "1"]);
+    fill_defaults(&mut args).expect("defaults should fill");
+    assert_eq!(args.dir, Some(DL_DIR.into()));
 }
 
 #[test]
 fn dir_accepts_custom_value() {
     let args = parse(&["-d", "./custom/", "d-pool", "1"]);
-    assert_eq!(args.dir, "./custom/");
+    assert_eq!(args.dir, Some("./custom/".into()));
 
     let args = parse(&["d-pool", "1", "--dir", "D:\\downloads"]);
-    assert_eq!(args.dir, "D:\\downloads");
+    assert_eq!(args.dir, Some("D:\\downloads".into()));
 }
 
 #[test]
@@ -50,6 +57,7 @@ fn track_file_accepts_custom_value() {
 
 #[test]
 fn all_subcommands_parse() {
+    assert!(matches!(parse(&["config"]).command, Some(Commands::Config)));
     assert!(matches!(parse(&["clear-dl"]).command, Some(Commands::ClearDl)));
     assert!(matches!(
         parse(&["d-favs", "someuser"]).command,
@@ -72,9 +80,38 @@ fn all_subcommands_parse() {
 #[test]
 fn zip_format_defaults_to_zip() {
     match parse(&["zip", "-n", "test"]).command {
-        Some(Commands::Zip { format, .. }) => assert!(matches!(format, ArchiveFormat::Zip)),
+        Some(Commands::Zip { format, .. }) => assert!(format.is_none()),
         _ => panic!("expected Zip command"),
     }
+}
+
+#[test]
+fn config_values_fill_missing_cli_values() {
+    let mut args = parse(&["d-pool"]);
+    let mut config = Config::default();
+    config.global.nsfw = Some(true);
+    config.global.num_threads = Some(2);
+    config.d_pool.pool_id = Some(123);
+
+    apply_config(&mut args, &config).expect("config should apply");
+    fill_defaults(&mut args).expect("defaults should fill");
+
+    assert!(args.nsfw);
+    assert_eq!(args.num_threads, Some(2));
+    assert!(validate_args(&args).is_ok());
+}
+
+#[test]
+fn cli_values_override_config_values() {
+    let mut args = parse(&["--nsfw", "-t", "2", "d-pool", "123"]);
+    let mut config = Config::default();
+    config.global.nsfw = Some(false);
+    config.global.num_threads = Some(10);
+
+    apply_config(&mut args, &config).expect("config should apply");
+
+    assert!(args.nsfw);
+    assert_eq!(args.num_threads, Some(2));
 }
 
 #[test]
@@ -84,8 +121,8 @@ fn zip_format_parses_each_variant() {
     {
         match parse(&["zip", "-n", "test", "-f", flag]).command {
             Some(Commands::Zip { format, .. }) => {
-                assert_eq!(matches!(format, ArchiveFormat::SevenZip), expect_seven);
-                assert_eq!(matches!(format, ArchiveFormat::Cbz), expect_cbz);
+                assert_eq!(matches!(format, Some(ArchiveFormat::SevenZip)), expect_seven);
+                assert_eq!(matches!(format, Some(ArchiveFormat::Cbz)), expect_cbz);
             }
             _ => panic!("expected Zip command"),
         }

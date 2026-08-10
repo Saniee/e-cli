@@ -1,6 +1,6 @@
 # E-Cli
 
-A fast, multi-threaded command line tool for downloading posts from e926.net/e621.net (or a compatible booru-style API).
+A fast, multi-threaded command line tool for downloading posts from e926.net/e621.net.
 
 It aims to be:
 * Fast
@@ -32,9 +32,18 @@ e-cli d-pool 22364 -d ./pool/               Download a pool into ./pool/
 e-cli d-favs someuser -c 100 -T seen.txt    Download favorites, skipping posts tracked in seen.txt
 e-cli zip -n Cloudjumping -f cbz            Package ./dl/ into Cloudjumping.cbz
 e-cli clear-dl                              Delete the ./dl/ output directory
+e-cli config                                 Create or edit the TOML configuration
 ```
 
 Run `e-cli --help` or `e-cli <command> --help` for the full list of flags.
+
+The SFW API (`e926.net`) is used by default. Pass `--nsfw` to use the NSFW API (`e621.net`).
+
+Run `e-cli config` to create or edit the configuration file. It stores global flags and
+subcommand defaults. The file is located at `%APPDATA%\e-cli\config.toml` on Windows and
+`$XDG_CONFIG_HOME/e-cli/config.toml` on Linux, falling back to `~/.config/e-cli/config.toml`.
+The command uses the editor named by the `EDITOR` environment variable. Command-line values
+override values from the configuration file.
 
 Packaging a pool into an archive (`zip`) shells out to the `7z` executable, which must be available on your `PATH`.
 

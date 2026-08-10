@@ -347,7 +347,7 @@ pub fn get_pages(
         loop {
             let target: String = format!(
                 "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
-                context.api_source,
+                context.api_source(),
                 fav,
                 tags,
                 random,
@@ -378,7 +378,7 @@ pub fn get_pages(
 
             let target: String = format!(
                 "https://{}/posts.json?tags={} {} {}&limit={}&page={}",
-                context.api_source,
+                context.api_source(),
                 fav,
                 tags,
                 random,
@@ -416,7 +416,7 @@ pub fn get_pool(
 ) -> Option<PoolData> {
     let target: String = format!(
         "https://{}/pools.json?limit=1&search[id]={}",
-        context.api_source, pool_id
+        context.api_source(), pool_id
     );
     let res = send_request(&client, login, &target);
     if let Err(e) = res.error_for_status_ref() {
@@ -450,7 +450,7 @@ pub fn get_post_data(
     for id in post_ids {
         let target = format!(
             "https://{}/posts.json?tags=id:{}&page=1&limit=1",
-            context.api_source, id
+            context.api_source(), id
         );
         let data = send_request(client, login, &target);
         if let Err(e) = data.error_for_status_ref() {

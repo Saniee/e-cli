@@ -1,14 +1,15 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
+
+use crate::config::Config;
 
 /// Default directory that downloads, `zip`, and `clear-dl` operate on.
 pub const DL_DIR: &str = "./dl/";
 
 #[derive(Parser)]
 #[command(about = "A fast, multi-threaded downloader for e926/e621-style booru APIs.")]
-#[command(version, long_about = "e-cli downloads posts from e926.net/e621.net (or a compatible \
-    booru-style API) by user favorites, tag search, or pool, using multiple threads to download \
+#[command(version, long_about = "e-cli downloads posts from e926.net/e621.net by user favorites, tag search, or pool, using multiple threads to download \
     files in parallel. Supports optional authenticated login and a lower-quality fallback mode.")]
 #[command(arg_required_else_help = true)]
 #[command(after_help = "EXAMPLES:\n  \
@@ -16,33 +17,39 @@ pub const DL_DIR: &str = "./dl/";
     e-cli d-favs someuser -c 100                 Download 100 favorites from 'someuser'\n  \
     e-cli d-pool 22364                           Download a pool into ./dl/\n  \
     e-cli d-pool 22364 -d ./pool/                Download a pool into ./pool/\n  \
-    e-cli d-favs someuser -c 100 -T seen.txt     Download favorites, skipping posts tracked in seen.txt\n  \
-    e-cli zip -n Cloudjumping -f cbz             Package ./dl/ into Cloudjumping.cbz\n  \
-    e-cli clear-dl                               Delete the ./dl/ output directory")]
+     e-cli d-favs someuser -c 100 -T seen.txt     Download favorites, skipping posts tracked in seen.txt\n  \
+     e-cli zip -n Cloudjumping -f cbz             Package ./dl/ into Cloudjumping.cbz\n  \
+     e-cli clear-dl                               Delete the ./dl/ output directory\n  \
+     e-cli config                                 Create or edit the TOML configuration")]
 pub struct Args {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    #[arg[short = 'v', long, help = "Verbose Output.", action]]
+    #[arg(short = 'v', long, help = "Verbose Output.", action = ArgAction::SetTrue)]
     pub verbose: bool,
 
-    #[arg[short = 'L', long, help = "Ability to sign-in into the API for better fetching of posts.", action]]
+    #[arg(short = 'L', long, help = "Ability to sign-in into the API for better fetching of posts.", action = ArgAction::SetTrue)]
     pub login: bool,
 
-    #[arg[short = 'a', long, help = "Specify the api url to use.", default_value = "e926.net"]]
-    pub api_source: String,
+    #[arg(
+        short = 'n',
+        long,
+        help = "Use the NSFW API (e621.net) instead of the SFW API (e926.net).",
+        action = ArgAction::SetTrue
+    )]
+    pub nsfw: bool,
 
-    #[arg[short = 'l', long, help = "Tries to download the lower quality media files."]]
+    #[arg(short = 'l', long, help = "Tries to download the lower quality media files.", action = ArgAction::SetTrue)]
     pub lower_quality: bool,
 
-    #[arg[short = 'p', long, help = "Number of pages to download, p = -1, gets all pages. p > 0, gets that amount of pages.", default_value_t = -1]]
-    pub pages: i64,
+    #[arg[short = 'p', long, help = "Number of pages to download, p = -1, gets all pages. p > 0, gets that amount of pages."]]
+    pub pages: Option<i64>,
 
-    #[arg[short = 't', long, help = "The number of threads to use for downloads. Cannot set above 10.", default_value_t = 5]]
-    pub num_threads: usize,
+    #[arg[short = 't', long, help = "The number of threads to use for downloads. Cannot set above 10."]]
+    pub num_threads: Option<usize>,
 
-    #[arg[short = 'd', long, global = true, help = "The directory to download files into (also used by zip and clear-dl).", default_value = DL_DIR]]
-    pub dir: String,
+    #[arg[short = 'd', long, global = true, help = "The directory to download files into (also used by zip and clear-dl)."]]
+    pub dir: Option<String>,
 
     #[arg[short = 'T', long, global = true, help = "Path to a tracking file that records downloaded post IDs, so re-runs only download new posts. Created if it doesn't exist."]]
     pub track_file: Option<PathBuf>,
@@ -50,33 +57,35 @@ pub struct Args {
 
 #[derive(Subcommand, PartialEq, Eq)]
 pub enum Commands {
+    #[command(about = "Opens the global TOML configuration file in the default editor.")]
+    Config,
     #[command[about = "Deletes the whole download directory (./dl/ by default, see -d) with it's contents."]]
     ClearDl,
     #[command[about = "Downloads the set amount of favourites from the username provided."]]
     DFavs {
-        username: String,
-        #[arg[short = 'c', help = "The amount of posts to get. Max=250.", default_value_t = 5]]
-        count: u32,
-        #[arg[short = 'r', help = "Adds the order:random in the search.", action]]
+        username: Option<String>,
+        #[arg[short = 'c', help = "The amount of posts to get. Max=250."]]
+        count: Option<u32>,
+        #[arg(short = 'r', help = "Adds the order:random in the search.", action = ArgAction::SetTrue)]
         random: bool,
-        #[arg[short = 't', help = "Specify the search further with tags.", default_value = ""]]
-        tags: String,
+        #[arg[short = 't', help = "Specify the search further with tags."]]
+        tags: Option<String>,
     },
     #[command[about = "Downloads the set amount of posts with the tags provided."]]
     #[command[long_about = "Downloads the set amount of posts with the tags provided.\n\n\
         Requires the global -p/--pages flag to be set explicitly (e.g. -p 1), since there is \
         no default page count for tag search."]]
     DTags {
-        tags: String,
-        #[arg[short = 'c', help = "The amount of posts to get. Max=250.", default_value_t = 5]]
-        count: u32,
-        #[arg[short = 'r', help = "Adds the order:random in the search.", action]]
+        tags: Option<String>,
+        #[arg[short = 'c', help = "The amount of posts to get. Max=250."]]
+        count: Option<u32>,
+        #[arg(short = 'r', help = "Adds the order:random in the search.", action = ArgAction::SetTrue)]
         random: bool,
     },
     #[command[about = "Downloads a pool with the indexes in the names of the files."]]
     DPool {
         #[arg(help = "The Pool ID")]
-        pool_id: u64,
+        pool_id: Option<u64>,
     },
     #[command[about = "Packages a downloaded pool (./dl/) into an archive."]]
     #[command[long_about = "Packages a downloaded pool (./dl/) into an archive.\n\n\
@@ -86,13 +95,13 @@ pub enum Commands {
         available on your PATH."]]
     Zip {
         #[arg[short = 'n', long, help = "Name for the output archive, without extension."]]
-        name: String,
-        #[arg[short = 'f', long, value_enum, default_value_t = ArchiveFormat::Zip, help = "Archive format to use."]]
-        format: ArchiveFormat,
+        name: Option<String>,
+        #[arg[short = 'f', long, value_enum, help = "Archive format to use."]]
+        format: Option<ArchiveFormat>,
     },
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ArchiveFormat {
     #[value(help = "Standard .zip archive.")]
     Zip,
@@ -112,29 +121,158 @@ impl ArchiveFormat {
     }
 }
 
+pub fn apply_config(args: &mut Args, config: &Config) -> Result<(), String> {
+    let global = &config.global;
+    if !args.verbose {
+        args.verbose = global.verbose.unwrap_or(false);
+    }
+    if !args.login {
+        args.login = global.login.unwrap_or(false);
+    }
+    if !args.nsfw {
+        args.nsfw = global.nsfw.unwrap_or(false);
+    }
+    if !args.lower_quality {
+        args.lower_quality = global.lower_quality.unwrap_or(false);
+    }
+    if args.pages.is_none() {
+        args.pages = global.pages;
+    }
+    if args.num_threads.is_none() {
+        args.num_threads = global.num_threads;
+    }
+    if args.dir.is_none() {
+        args.dir = global.dir.clone();
+    }
+    if args.track_file.is_none() {
+        args.track_file = global.track_file.clone();
+    }
+
+    match &mut args.command {
+        Some(Commands::DFavs {
+            username,
+            count,
+            random,
+            tags,
+        }) => {
+            if username.is_none() {
+                *username = config.d_favs.username.clone();
+            }
+            if count.is_none() {
+                *count = config.d_favs.count;
+            }
+            if !*random {
+                *random = config.d_favs.random.unwrap_or(false);
+            }
+            if tags.is_none() {
+                *tags = config.d_favs.tags.clone();
+            }
+        }
+        Some(Commands::DTags {
+            tags,
+            count,
+            random,
+        }) => {
+            if tags.is_none() {
+                *tags = config.d_tags.tags.clone();
+            }
+            if count.is_none() {
+                *count = config.d_tags.count;
+            }
+            if !*random {
+                *random = config.d_tags.random.unwrap_or(false);
+            }
+        }
+        Some(Commands::DPool { pool_id }) => {
+            if pool_id.is_none() {
+                *pool_id = config.d_pool.pool_id;
+            }
+        }
+        Some(Commands::Zip { name, format }) => {
+            if name.is_none() {
+                *name = config.zip.name.clone();
+            }
+            if format.is_none() {
+                if let Some(value) = config.zip.format.as_deref() {
+                    *format = Some(match value {
+                        "zip" => ArchiveFormat::Zip,
+                        "7z" => ArchiveFormat::SevenZip,
+                        "cbz" => ArchiveFormat::Cbz,
+                        _ => {
+                            return Err(format!(
+                                "Invalid zip format '{value}' in the config; expected zip, 7z, or cbz."
+                            ));
+                        }
+                    });
+                }
+            }
+        }
+        Some(Commands::Config) | Some(Commands::ClearDl) | None => {}
+    }
+    Ok(())
+}
+
+pub fn fill_defaults(args: &mut Args) -> Result<(), String> {
+    args.pages.get_or_insert(-1);
+    args.num_threads.get_or_insert(5);
+    args.dir.get_or_insert_with(|| DL_DIR.to_owned());
+
+    match &mut args.command {
+        Some(Commands::DFavs {
+            count, tags, ..
+        }) => {
+            count.get_or_insert(5);
+            tags.get_or_insert_with(String::new);
+        }
+        Some(Commands::DTags { count, .. }) => {
+            count.get_or_insert(5);
+        }
+        Some(Commands::Zip { format, .. }) => {
+            format.get_or_insert(ArchiveFormat::Zip);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 pub fn validate_args(args: &Args) -> Result<(), String> {
-    if args.num_threads == 0 {
+    if args.num_threads.unwrap_or(5) == 0 {
         return Err("Must use at least 1 thread.".into());
     }
-    if args.num_threads > 10 {
+    if args.num_threads.unwrap_or(5) > 10 {
         return Err("Cannot go above 10 threads for downloads.".into());
     }
     if let Some(Commands::DFavs { count, .. }) = &args.command
-        && *count > 250
+        && count.unwrap_or(5) > 250
     {
         return Err("Cannot go above 250 posts per page.".into());
     }
     if let Some(Commands::DTags { count, .. }) = &args.command
-        && *count > 250
+        && count.unwrap_or(5) > 250
     {
         return Err("Cannot go above 250 posts per page.".into());
     }
     if let Some(Commands::DTags { .. }) = &args.command
-        && args.pages == -1
+        && args.pages.unwrap_or(-1) == -1
     {
         return Err(
             "You NEED to specify the page amount for downloading with tags. Exiting...".into(),
         );
+    }
+    match &args.command {
+        Some(Commands::DFavs { username, .. }) if username.is_none() => {
+            return Err("d-favs requires a username argument or a configured username.".into());
+        }
+        Some(Commands::DTags { tags, .. }) if tags.is_none() => {
+            return Err("d-tags requires tags or a configured tags value.".into());
+        }
+        Some(Commands::DPool { pool_id }) if pool_id.is_none() => {
+            return Err("d-pool requires a pool ID argument or a configured pool_id.".into());
+        }
+        Some(Commands::Zip { name, .. }) if name.is_none() => {
+            return Err("zip requires a name argument or a configured name.".into());
+        }
+        _ => {}
     }
     Ok(())
 }
