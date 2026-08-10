@@ -13,6 +13,7 @@ use e_cli::{
     commands::{self, download_favourites, download_pool, download_search},
     config,
     funcs,
+    update,
 };
 use indicatif::MultiProgress;
 use tracing::{Level, error, info, span};
@@ -51,6 +52,11 @@ fn main() {
             eprintln!("{e}");
             process::exit(1);
         }
+        return;
+    }
+
+    if matches!(&args.command, Some(Commands::CheckUpdate)) {
+        check_update_cmd();
         return;
     }
 
@@ -182,6 +188,7 @@ fn main() {
 
     match &args.command {
         Some(Commands::Config) => return,
+        Some(Commands::CheckUpdate) => return,
         Some(Commands::ClearDl) => {
             if !dl_dir.exists() {
                 return info!("Nothing to clean... Exiting!");
@@ -245,6 +252,23 @@ fn main() {
     }
 
     finish(download_stats, fn_start);
+}
+
+fn check_update_cmd() {
+    let current = env!("CARGO_PKG_VERSION");
+    match update::check_update("Saniee/e-cli", current) {
+        Ok(Some(latest)) => {
+            println!(
+                "A new version of e-cli is available: v{latest} (you're on v{current}).\n\
+                 https://github.com/Saniee/e-cli/releases/tag/v{latest}"
+            );
+        }
+        Ok(None) => println!("e-cli is up to date (v{current})."),
+        Err(e) => {
+            eprintln!("{e}");
+            process::exit(1);
+        }
+    }
 }
 
 fn finish(statistics: DownloadStatistics, timer: Instant) {

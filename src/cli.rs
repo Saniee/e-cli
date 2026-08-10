@@ -59,6 +59,8 @@ pub struct Args {
 pub enum Commands {
     #[command(about = "Opens the global TOML configuration file in the default editor.")]
     Config,
+    #[command[about = "Checks whether a newer e-cli release is available on GitHub."]]
+    CheckUpdate,
     #[command[about = "Deletes the whole download directory (./dl/ by default, see -d) with it's contents."]]
     ClearDl,
     #[command[about = "Downloads the set amount of favourites from the username provided."]]
@@ -207,7 +209,8 @@ pub fn apply_config(args: &mut Args, config: &Config) -> Result<(), String> {
                 }
             }
         }
-        Some(Commands::Config) | Some(Commands::ClearDl) | None => {}
+        Some(Commands::Config) | Some(Commands::ClearDl) | Some(Commands::CheckUpdate) | None => {
+        }
     }
     Ok(())
 }

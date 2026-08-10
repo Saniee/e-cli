@@ -16,6 +16,7 @@ pub mod config;
 pub mod funcs;
 pub mod tracker;
 pub mod type_defs;
+pub mod update;
 
 pub use tracker::Tracker;
 
