@@ -20,7 +20,15 @@ use tracing_subscriber::{
     EnvFilter, Layer, fmt, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
+#[cfg(feature = "tui")]
 mod tui;
+
+#[cfg(not(feature = "tui"))]
+mod tui {
+    pub fn run() -> Result<(), String> {
+        Err("The TUI is not included in this build. Rebuild with --features tui.".into())
+    }
+}
 
 /// A `tracing` writer that suspends any active `indicatif` progress bars
 /// while a log line is written, so bar rendering doesn't get clobbered.

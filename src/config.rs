@@ -68,7 +68,11 @@ pub struct ZipConfig {
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct PresetConfig {
+    pub source: Option<String>,
     pub tags: Option<String>,
+    pub fav_tags: Option<String>,
+    pub username: Option<String>,
+    pub pool_id: Option<u64>,
     pub count: Option<u32>,
     pub pages: Option<i64>,
     pub random: Option<bool>,
@@ -210,7 +214,21 @@ fn render(config: &Config) -> String {
 
     for (name, preset) in &config.presets {
         out.push_str(&format!("[presets.{name}]\n"));
+        str_key(&mut out, "source", preset.source.clone(), "\"tags\"");
         str_key(&mut out, "tags", preset.tags.clone(), "\"scalie\"");
+        str_key(&mut out, "fav_tags", preset.fav_tags.clone(), "\"\"");
+        str_key(
+            &mut out,
+            "username",
+            preset.username.clone(),
+            "\"someuser\"",
+        );
+        int_key(
+            &mut out,
+            "pool_id",
+            preset.pool_id.map(|value| value as i64),
+            "22364",
+        );
         int_key(&mut out, "count", preset.count.map(|v| v as i64), "5");
         int_key(&mut out, "pages", preset.pages, "1");
         bool_key(&mut out, "random", preset.random, "false");
