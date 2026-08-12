@@ -29,7 +29,7 @@ It aims to be:
 [GUI App](https://github.com/Saniee/e-cli-gui)
 
 Or just run:
-`e-cli tui`
+`e-cli tui` (In fairness use the actual GUI implementation as the TUI is in it's early stages.)
 
 ## Usage
 
