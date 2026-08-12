@@ -53,6 +53,7 @@ pub struct DownloadProgress {
     pub skipped: i64,
     pub total: usize,
     pub downloaded_amount: f64,
+    pub phase: Option<String>,
 }
 
 pub type ProgressObserver = std::sync::Arc<dyn Fn(DownloadProgress) + Send + Sync>;

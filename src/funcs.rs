@@ -636,6 +636,7 @@ pub fn get_pages(
                 pages + 1
             );
             debug!(target);
+            report_phase(context, format!("Fetching page {}...", pages + 1));
 
             let Some(res) = request(context, client, login, &target) else {
                 break;
@@ -669,6 +670,7 @@ pub fn get_pages(
                 pages + 1
             );
 
+            report_phase(context, format!("Fetching page {}...", pages + 1));
             let Some(res) = request(context, client, login, &target) else {
                 break;
             };
@@ -704,6 +706,7 @@ pub fn get_pool(
         context.api_source(),
         pool_id
     );
+    report_phase(context, format!("Fetching pool {pool_id}..."));
     let res = request(context, client, login, &target)?;
     if let Err(e) = res.error_for_status_ref() {
         error!("Response returned: {}", e);
@@ -739,6 +742,7 @@ pub fn get_post_data(
             context.api_source(),
             id
         );
+        report_phase(context, format!("Fetching post {id}..."));
         let Some(data) = request(context, client, login, &target) else {
             return Vec::new();
         };
@@ -815,6 +819,19 @@ fn request(context: &CliContext, client: &Client, login: &Login, target: &str) -
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => return None,
         }
+    }
+}
+
+fn report_phase(context: &CliContext, phase: String) {
+    if let Some(observer) = &context.progress {
+        observer(crate::DownloadProgress {
+            completed: 0,
+            failed: 0,
+            skipped: 0,
+            total: 0,
+            downloaded_amount: 0.0,
+            phase: Some(phase),
+        });
     }
 }
 

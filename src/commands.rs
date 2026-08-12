@@ -34,6 +34,7 @@ fn report_progress(
             skipped,
             total,
             downloaded_amount,
+            phase: None,
         });
     }
 }

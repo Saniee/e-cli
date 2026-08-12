@@ -307,6 +307,10 @@ impl App {
                     self.log.push(status);
                 }
                 WorkerMessage::Progress(progress) => {
+                    if let Some(phase) = progress.phase {
+                        self.status = phase;
+                        continue;
+                    }
                     let done = progress.completed + progress.failed + progress.skipped;
                     self.progress = if progress.total == 0 {
                         0
