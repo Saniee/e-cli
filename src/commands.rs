@@ -113,7 +113,9 @@ pub fn download_favourites(
     let mut failed: i64 = 0;
     let mut skipped: i64 = 0;
     let mut records = Vec::new();
-    let chunk_size = context.num_threads as i32;
+    // Use one post per rayon task so the progress bar and ETA update after
+    // every completed file rather than waiting for a multi-post chunk.
+    let chunk_size = 1;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
         .build()
@@ -215,7 +217,7 @@ pub fn download_search(
     let mut failed: i64 = 0;
     let mut skipped: i64 = 0;
     let mut records = Vec::new();
-    let chunk_size = context.num_threads as i32;
+    let chunk_size = 1;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
         .build()
@@ -324,7 +326,7 @@ pub fn download_pool(
         let mut failed: i64 = 0;
         let mut skipped: i64 = 0;
         let mut records = Vec::new();
-        let chunk_size = context.num_threads as i32;
+        let chunk_size = 1;
         let sliced_posts = slice_pool_posts(posts_sorted, chunk_size);
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(context.num_threads)
