@@ -58,7 +58,10 @@ fn track_file_accepts_custom_value() {
 #[test]
 fn all_subcommands_parse() {
     assert!(matches!(parse(&["config"]).command, Some(Commands::Config)));
-    assert!(matches!(parse(&["clear-dl"]).command, Some(Commands::ClearDl)));
+    assert!(matches!(
+        parse(&["clear-dl"]).command,
+        Some(Commands::ClearDl)
+    ));
     assert!(matches!(
         parse(&["d-favs", "someuser"]).command,
         Some(Commands::DFavs { .. })
@@ -74,6 +77,14 @@ fn all_subcommands_parse() {
     assert!(matches!(
         parse(&["zip", "-n", "test"]).command,
         Some(Commands::Zip { .. })
+    ));
+    assert!(matches!(
+        parse(&["preset", "art"]).command,
+        Some(Commands::Preset { .. })
+    ));
+    assert!(matches!(
+        parse(&["retry-failed"]).command,
+        Some(Commands::RetryFailed)
     ));
 }
 
@@ -116,12 +127,17 @@ fn cli_values_override_config_values() {
 
 #[test]
 fn zip_format_parses_each_variant() {
-    for (flag, expect_seven, expect_cbz) in
-        [("zip", false, false), ("7z", true, false), ("cbz", false, true)]
-    {
+    for (flag, expect_seven, expect_cbz) in [
+        ("zip", false, false),
+        ("7z", true, false),
+        ("cbz", false, true),
+    ] {
         match parse(&["zip", "-n", "test", "-f", flag]).command {
             Some(Commands::Zip { format, .. }) => {
-                assert_eq!(matches!(format, Some(ArchiveFormat::SevenZip)), expect_seven);
+                assert_eq!(
+                    matches!(format, Some(ArchiveFormat::SevenZip)),
+                    expect_seven
+                );
                 assert_eq!(matches!(format, Some(ArchiveFormat::Cbz)), expect_cbz);
             }
             _ => panic!("expected Zip command"),

@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use std::fs::File;
-use std::{fs::create_dir_all, io::Write};
+use std::fs::{File, OpenOptions};
+use std::{fs, fs::create_dir_all, io::Write, thread, time::Duration};
 
 use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
@@ -38,6 +38,25 @@ pub struct DownloadFinished {
     pub amount_failed: i64,
     pub amount_skipped: i64,
     pub amount: f64,
+    pub records: Vec<crate::DownloadRecord>,
+}
+
+impl DownloadFinished {
+    pub fn into_statistics(self, total: usize) -> crate::DownloadStatistics {
+        crate::DownloadStatistics {
+            completed: self.amount_finished,
+            failed: self.amount_failed,
+            skipped: self.amount_skipped,
+            total,
+            downloaded_amount: self.amount,
+            records: self.records,
+        }
+    }
+}
+
+pub struct DownloadOptions<'a> {
+    pub retries: u32,
+    pub duplicate_index: Option<&'a crate::duplicate::DuplicateIndex>,
 }
 
 /// Downloads a batch of posts into `output_dir`, skipping (and counting in
@@ -62,6 +81,32 @@ pub fn download(
     output_dir: &Path,
     tracker: Option<&Tracker>,
 ) -> DownloadFinished {
+    download_with_options(
+        client,
+        login,
+        data,
+        index,
+        lower_quality,
+        output_dir,
+        tracker,
+        DownloadOptions {
+            retries: 3,
+            duplicate_index: None,
+        },
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn download_with_options(
+    client: &Client,
+    login: &Login,
+    data: Vec<Post>,
+    index: Option<&u64>,
+    lower_quality: &bool,
+    output_dir: &Path,
+    tracker: Option<&Tracker>,
+    options: DownloadOptions<'_>,
+) -> DownloadFinished {
     let span = span!(Level::DEBUG, "download_handler");
     let _guard = span.enter();
 
@@ -69,6 +114,7 @@ pub fn download(
     let mut amount_finished = 0;
     let mut amount_failed = 0;
     let mut amount_skipped = 0;
+    let mut records = Vec::new();
 
     for post in data {
         let artist_name = post.tags.parse_artists();
@@ -81,6 +127,17 @@ pub fn download(
                 artist_name, post.id
             );
             amount_skipped += 1;
+            records.push(crate::DownloadRecord {
+                post_id: post.id,
+                source_url: post.file.url.clone(),
+                md5: post.file.md5.clone(),
+                artist: artist_name.clone(),
+                extension: post.file.ext.clone(),
+                local_filename: None,
+                status: "skipped".into(),
+                bytes: 0,
+                error: None,
+            });
             continue;
         }
 
@@ -95,11 +152,49 @@ pub fn download(
                 tracker.insert(post.id);
             }
             amount_skipped += 1;
+            records.push(crate::DownloadRecord {
+                post_id: post.id,
+                source_url: post.file.url.clone(),
+                md5: post.file.md5.clone(),
+                artist: artist_name.clone(),
+                extension: post.file.ext.clone(),
+                local_filename: Some(path.file_name().unwrap().to_string_lossy().into()),
+                status: "skipped".into(),
+                bytes: 0,
+                error: None,
+            });
+            continue;
+        }
+
+        if let Some(md5) = post.file.md5.as_deref()
+            && let Some(index) = options.duplicate_index
+            && let Some(existing) = index.contains(md5)
+        {
+            amount_skipped += 1;
+            records.push(crate::DownloadRecord {
+                post_id: post.id,
+                source_url: post.file.url.clone(),
+                md5: post.file.md5.clone(),
+                artist: artist_name.clone(),
+                extension: post.file.ext.clone(),
+                local_filename: Some(existing),
+                status: "duplicate".into(),
+                bytes: 0,
+                error: None,
+            });
             continue;
         }
 
         if *lower_quality {
-            let stat = lower_quality_dl_file(client, login, &post, &artist_name, index, output_dir);
+            let stat = lower_quality_dl_file_with_retries(
+                client,
+                login,
+                &post,
+                &artist_name,
+                index,
+                output_dir,
+                options.retries,
+            );
             if stat.finished {
                 downloaded_bytes += stat.downloaded_bytes;
                 amount_finished += 1;
@@ -113,14 +208,45 @@ pub fn download(
                     post.file.ext,
                     stat.downloaded_bytes / 1024.0 / 1024.0
                 );
+                let filename = file_name(index, &artist_name, post.id, &post.file.ext);
+                if let (Some(md5), Some(index)) =
+                    (post.file.md5.as_deref(), options.duplicate_index)
+                {
+                    index.insert(md5, &filename);
+                }
+                records.push(crate::DownloadRecord {
+                    post_id: post.id,
+                    source_url: post.file.url.clone(),
+                    md5: post.file.md5.clone(),
+                    artist: artist_name.clone(),
+                    extension: post.file.ext.clone(),
+                    local_filename: Some(filename),
+                    status: "completed".into(),
+                    bytes: stat.downloaded_bytes as u64,
+                    error: None,
+                });
             } else {
                 amount_failed += 1;
-                warn!("Failed to download {}-{}.{}", artist_name, post.id, post.file.ext);
+                warn!(
+                    "Failed to download {}-{}.{}",
+                    artist_name, post.id, post.file.ext
+                );
+                records.push(crate::DownloadRecord {
+                    post_id: post.id,
+                    source_url: post.file.url.clone(),
+                    md5: post.file.md5.clone(),
+                    artist: artist_name.clone(),
+                    extension: post.file.ext.clone(),
+                    local_filename: None,
+                    status: "failed".into(),
+                    bytes: 0,
+                    error: Some("download failed".into()),
+                });
             }
         } else {
             match &post.file.url {
                 Some(url) => {
-                    let stat = download_file(
+                    let stat = download_file_with_retries(
                         client,
                         login,
                         url,
@@ -129,6 +255,7 @@ pub fn download(
                         &artist_name,
                         index,
                         output_dir,
+                        options.retries,
                     );
                     if stat.finished {
                         downloaded_bytes += stat.downloaded_bytes;
@@ -143,9 +270,40 @@ pub fn download(
                             post.file.ext,
                             stat.downloaded_bytes / 1024.0 / 1024.0
                         );
+                        let filename = file_name(index, &artist_name, post.id, &post.file.ext);
+                        if let (Some(md5), Some(index)) =
+                            (post.file.md5.as_deref(), options.duplicate_index)
+                        {
+                            index.insert(md5, &filename);
+                        }
+                        records.push(crate::DownloadRecord {
+                            post_id: post.id,
+                            source_url: post.file.url.clone(),
+                            md5: post.file.md5.clone(),
+                            artist: artist_name.clone(),
+                            extension: post.file.ext.clone(),
+                            local_filename: Some(filename),
+                            status: "completed".into(),
+                            bytes: stat.downloaded_bytes as u64,
+                            error: None,
+                        });
                     } else {
                         amount_failed += 1;
-                        warn!("Failed to download {}-{}.{}", artist_name, post.id, post.file.ext);
+                        warn!(
+                            "Failed to download {}-{}.{}",
+                            artist_name, post.id, post.file.ext
+                        );
+                        records.push(crate::DownloadRecord {
+                            post_id: post.id,
+                            source_url: post.file.url.clone(),
+                            md5: post.file.md5.clone(),
+                            artist: artist_name.clone(),
+                            extension: post.file.ext.clone(),
+                            local_filename: None,
+                            status: "failed".into(),
+                            bytes: 0,
+                            error: Some("download failed".into()),
+                        });
                     }
                 }
                 None => {
@@ -154,6 +312,17 @@ pub fn download(
                         artist_name, post.id
                     );
                     amount_failed += 1;
+                    records.push(crate::DownloadRecord {
+                        post_id: post.id,
+                        source_url: None,
+                        md5: post.file.md5.clone(),
+                        artist: artist_name.clone(),
+                        extension: post.file.ext.clone(),
+                        local_filename: None,
+                        status: "failed".into(),
+                        bytes: 0,
+                        error: Some("missing file URL".into()),
+                    });
                 }
             }
         }
@@ -164,6 +333,7 @@ pub fn download(
         amount_failed,
         amount_skipped,
         amount: downloaded_bytes,
+        records,
     }
 }
 
@@ -189,29 +359,106 @@ pub fn download_file(
     let span = span!(Level::DEBUG, "file_download");
     let _guard = span.enter();
 
-    let mut res = send_request(client, login, target_url);
-    debug!(status = %res.status(), content_length = ?res.content_length(), "response received");
-    let name = file_name(index, artist_name, post_id, file_ext);
-    let mut out = match File::create(output_dir.join(name)) {
-        Ok(o) => o,
-        Err(_) => {
-            return DownloadStatus::default();
-        }
-    };
+    download_file_with_retries(
+        client,
+        login,
+        target_url,
+        file_ext,
+        post_id,
+        artist_name,
+        index,
+        output_dir,
+        3,
+    )
+}
 
-    match res.copy_to(&mut out) {
-        Ok(written) => {
-            out.flush().expect("Err");
-            DownloadStatus {
-                finished: true,
-                downloaded_bytes: written as f64,
+#[allow(clippy::too_many_arguments)]
+pub fn download_file_with_retries(
+    client: &Client,
+    login: &Login,
+    target_url: &str,
+    file_ext: &str,
+    post_id: u64,
+    artist_name: &str,
+    index: Option<&u64>,
+    output_dir: &Path,
+    retries: u32,
+) -> DownloadStatus {
+    let span = span!(Level::DEBUG, "file_download");
+    let _guard = span.enter();
+    let name = file_name(index, artist_name, post_id, file_ext);
+    let target = output_dir.join(&name);
+    let part = output_dir.join(format!("{name}.part"));
+
+    for attempt in 0..=retries {
+        let existing = fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+        let mut request = if !login.username.is_empty() && !login.api_key.is_empty() {
+            client
+                .get(target_url)
+                .basic_auth(&login.username, Some(&login.api_key))
+        } else {
+            client.get(target_url)
+        };
+        if existing > 0 {
+            request = request.header(reqwest::header::RANGE, format!("bytes={existing}-"));
+        }
+        let mut response = match request.send() {
+            Ok(response) if response.status().is_success() => response,
+            Ok(response)
+                if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+                    || response.status().is_server_error() =>
+            {
+                if attempt < retries {
+                    thread::sleep(Duration::from_millis(200 * 2u64.pow(attempt.min(4))));
+                    continue;
+                }
+                warn!("Failed to request {name}: HTTP {}", response.status());
+                return DownloadStatus::default();
+            }
+            Ok(response) => {
+                warn!("Failed to request {name}: HTTP {}", response.status());
+                return DownloadStatus::default();
+            }
+            Err(error) if attempt < retries => {
+                thread::sleep(Duration::from_millis(200 * 2u64.pow(attempt.min(4))));
+                debug!("Retrying {name} after request failure: {error}");
+                continue;
+            }
+            Err(error) => {
+                warn!("Failed to request {name}: {error}");
+                return DownloadStatus::default();
+            }
+        };
+        let append = existing > 0 && response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+        let mut out = if append {
+            match OpenOptions::new().create(true).append(true).open(&part) {
+                Ok(file) => file,
+                Err(_) => return DownloadStatus::default(),
+            }
+        } else {
+            match File::create(&part) {
+                Ok(file) => file,
+                Err(_) => return DownloadStatus::default(),
+            }
+        };
+        match response.copy_to(&mut out) {
+            Ok(written) if out.flush().is_ok() && fs::rename(&part, &target).is_ok() => {
+                let total = if append { existing + written } else { written };
+                return DownloadStatus {
+                    finished: true,
+                    downloaded_bytes: total as f64,
+                };
+            }
+            _ if attempt < retries => {
+                thread::sleep(Duration::from_millis(200 * 2u64.pow(attempt.min(4))));
+            }
+            _ => {
+                warn!("Failed to write {name}");
+                return DownloadStatus::default();
             }
         }
-        Err(e) => {
-            warn!("Failed to stream {artist_name}-{post_id}.{file_ext}: {e}");
-            DownloadStatus::default()
-        }
     }
+    DownloadStatus::default()
 }
 
 /// Downloads a lower-quality variant of `post`, for use when `--lower-quality`
@@ -229,6 +476,19 @@ pub fn lower_quality_dl_file(
     index: Option<&u64>,
     output_dir: &Path,
 ) -> DownloadStatus {
+    lower_quality_dl_file_with_retries(client, login, post, artist_name, index, output_dir, 3)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn lower_quality_dl_file_with_retries(
+    client: &Client,
+    login: &Login,
+    post: &Post,
+    artist_name: &str,
+    index: Option<&u64>,
+    output_dir: &Path,
+    retries: u32,
+) -> DownloadStatus {
     let span = span!(Level::DEBUG, "lower_quality_handler");
     let _guard = span.enter();
 
@@ -243,7 +503,7 @@ pub fn lower_quality_dl_file(
         .or(post.file.url.as_ref());
 
     match url {
-        Some(url) => download_file(
+        Some(url) => download_file_with_retries(
             client,
             login,
             url,
@@ -252,6 +512,7 @@ pub fn lower_quality_dl_file(
             artist_name,
             index,
             output_dir,
+            retries,
         ),
         None => {
             warn!(
@@ -416,9 +677,10 @@ pub fn get_pool(
 ) -> Option<PoolData> {
     let target: String = format!(
         "https://{}/pools.json?limit=1&search[id]={}",
-        context.api_source(), pool_id
+        context.api_source(),
+        pool_id
     );
-    let res = send_request(&client, login, &target);
+    let res = send_request(client, login, &target);
     if let Err(e) = res.error_for_status_ref() {
         error!("Response returned: {}", e);
         return None;
@@ -431,7 +693,7 @@ pub fn get_pool(
         return None;
     }
 
-    return Some(data[0].clone());
+    Some(data[0].clone())
 }
 
 /// Fetches full post data for each ID in `post_ids`, one request per ID, in
@@ -450,7 +712,8 @@ pub fn get_post_data(
     for id in post_ids {
         let target = format!(
             "https://{}/posts.json?tags=id:{}&page=1&limit=1",
-            context.api_source(), id
+            context.api_source(),
+            id
         );
         let data = send_request(client, login, &target);
         if let Err(e) = data.error_for_status_ref() {

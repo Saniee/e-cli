@@ -13,17 +13,29 @@ pub struct Post {
     pub file: File,
     pub tags: Tags,
     pub sample: Sample,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct File {
     pub ext: String,
     pub url: Option<String>,
+    #[serde(default)]
+    pub md5: Option<String>,
+    #[serde(default)]
+    pub size: Option<u64>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Tags {
     pub artist: Vec<String>,
+    #[serde(default)]
+    pub general: Vec<String>,
 }
 
 impl Tags {
@@ -78,6 +90,7 @@ mod tests {
     fn tags(artists: Vec<&str>) -> Tags {
         Tags {
             artist: artists.into_iter().map(String::from).collect(),
+            general: vec![],
         }
     }
 

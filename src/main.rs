@@ -3,6 +3,7 @@ use std::{
     io::{self, Write},
     path::Path,
     process,
+    sync::Arc,
     time::Instant,
 };
 
@@ -11,9 +12,7 @@ use e_cli::{
     CliContext, DownloadStatistics, Login, Tracker,
     cli::{self, Commands},
     commands::{self, download_favourites, download_pool, download_search},
-    config,
-    funcs,
-    update,
+    config, funcs, update,
 };
 use indicatif::MultiProgress;
 use tracing::{Level, error, info, span};
@@ -88,10 +87,22 @@ fn main() {
         lower_quality: args.lower_quality,
         pages: args.pages.unwrap_or(-1),
         num_threads: args.num_threads.unwrap_or(5),
+        retries: args.retries,
+        duplicate_index: if args.dry_run {
+            None
+        } else {
+            let path = args.duplicate_index.clone().unwrap_or_else(|| {
+                Path::new(args.dir.as_deref().unwrap_or(cli::DL_DIR)).join(".e-cli-md5.json")
+            });
+            match e_cli::duplicate::DuplicateIndex::load(&path) {
+                Ok(index) => Some(Arc::new(index)),
+                Err(e) => return error!("Failed to open duplicate index {}: {e}", path.display()),
+            }
+        },
     };
     let mp = MultiProgress::new();
     let progress_writer = ProgressWriter(mp.clone());
-    if args.verbose {
+    if args.verbose && !args.dry_run {
         let logging = fmt::layer()
             .compact()
             .with_target(false)
@@ -156,6 +167,11 @@ fn main() {
     let login = Login { username, api_key };
 
     let dl_dir = Path::new(args.dir.as_deref().unwrap_or(cli::DL_DIR));
+
+    if args.dry_run {
+        dry_run_cmd(&args, &file_config, &context, &login, dl_dir);
+        return;
+    }
 
     // Create the download directory up front (before the tracking file is
     // opened), since users commonly keep the tracking file inside the
@@ -235,8 +251,14 @@ fn main() {
             );
         }
         Some(Commands::DPool { pool_id }) => {
-            download_stats =
-                download_pool(&context, &login, &pool_id.expect("validated pool ID"), &mp, dl_dir, tracker.as_ref());
+            download_stats = download_pool(
+                &context,
+                &login,
+                &pool_id.expect("validated pool ID"),
+                &mp,
+                dl_dir,
+                tracker.as_ref(),
+            );
         }
         Some(Commands::Zip { name, format }) => {
             if !commands::zip_downloads(
@@ -248,10 +270,235 @@ fn main() {
             }
             return;
         }
+        Some(Commands::Preset {
+            name,
+            count,
+            random,
+        }) => {
+            let preset = match file_config.presets.get(name) {
+                Some(preset) => preset,
+                None => return error!("Unknown preset '{name}'."),
+            };
+            let tags = preset.tags.as_deref().unwrap_or_default();
+            download_stats = download_search(
+                &context,
+                &login,
+                tags,
+                &count.or(preset.count).unwrap_or(5),
+                &(*random || preset.random.unwrap_or(false)),
+                &mp,
+                dl_dir,
+                tracker.as_ref(),
+            );
+        }
+        Some(Commands::RetryFailed) => {
+            let path = args
+                .failure_manifest
+                .clone()
+                .unwrap_or_else(|| dl_dir.join(".e-cli-failed.json"));
+            let manifest = match e_cli::failure_manifest::FailureManifest::load(&path) {
+                Ok(manifest) => manifest,
+                Err(e) => return error!("{e}"),
+            };
+            let retry_dir = manifest.destination.clone();
+            funcs::ensure_dl_dir(&retry_dir);
+            let retry_duplicate_path = args
+                .duplicate_index
+                .clone()
+                .unwrap_or_else(|| retry_dir.join(".e-cli-md5.json"));
+            let retry_duplicate = e_cli::duplicate::DuplicateIndex::load(&retry_duplicate_path)
+                .ok()
+                .map(Arc::new);
+            let retry_context = CliContext {
+                verbose: context.verbose,
+                nsfw: manifest.api_source == "e621.net",
+                lower_quality: manifest.lower_quality,
+                pages: context.pages,
+                num_threads: context.num_threads,
+                retries: manifest.retries,
+                duplicate_index: retry_duplicate,
+            };
+            let client = commands::get_client();
+            let ids = manifest
+                .records
+                .iter()
+                .map(|record| record.post_id)
+                .collect::<Vec<_>>();
+            let posts = funcs::get_post_data(&retry_context, &client, &login, &ids);
+            download_stats = funcs::download_with_options(
+                &client,
+                &login,
+                posts,
+                None,
+                &manifest.lower_quality,
+                &retry_dir,
+                tracker.as_ref(),
+                funcs::DownloadOptions {
+                    retries: manifest.retries,
+                    duplicate_index: context.duplicate_index.as_deref(),
+                },
+            )
+            .into_statistics(ids.len());
+            if let Some(updated) = e_cli::failure_manifest::FailureManifest::from_statistics(
+                retry_context.api_source(),
+                &retry_dir,
+                manifest.lower_quality,
+                manifest.retries,
+                &download_stats,
+            ) {
+                if let Err(e) = updated.save(&path) {
+                    error!("{e}");
+                }
+            } else if let Err(e) = fs::remove_file(&path)
+                && e.kind() != io::ErrorKind::NotFound
+            {
+                error!("Failed to remove {}: {e}", path.display());
+            }
+        }
         None => return,
     }
 
+    if let Some(path) = args.manifest.as_deref()
+        && let Err(e) = e_cli::manifest::write(path, &download_stats)
+    {
+        error!("{e}");
+    }
+    let failure_path = args
+        .failure_manifest
+        .clone()
+        .unwrap_or_else(|| dl_dir.join(".e-cli-failed.json"));
+    if !matches!(&args.command, Some(Commands::RetryFailed))
+        && let Some(manifest) = e_cli::failure_manifest::FailureManifest::from_statistics(
+            context.api_source(),
+            dl_dir,
+            context.lower_quality,
+            context.retries,
+            &download_stats,
+        )
+        && let Err(e) = manifest.save(&failure_path)
+    {
+        error!("{e}");
+    }
+    if !matches!(&args.command, Some(Commands::RetryFailed)) && download_stats.failed == 0 {
+        let _ = fs::remove_file(&failure_path);
+    }
+    let failed = download_stats.failed;
     finish(download_stats, fn_start);
+    if failed > 0 {
+        process::exit(1);
+    }
+}
+
+fn dry_run_cmd(
+    args: &cli::Args,
+    config: &config::Config,
+    context: &e_cli::CliContext,
+    login: &Login,
+    dir: &Path,
+) {
+    let client = commands::get_client();
+    let (total, bytes, skipped) = match &args.command {
+        Some(Commands::DFavs {
+            username,
+            count,
+            random,
+            tags,
+        }) => {
+            let random = if *random { "order:random" } else { "" };
+            let data = funcs::get_pages(
+                context,
+                login,
+                &client,
+                &format!("fav:{}", username.as_deref().unwrap_or_default()),
+                tags.as_deref().unwrap_or_default(),
+                random,
+                &count.unwrap_or(5),
+            );
+            let posts = data.into_iter().flatten().collect::<Vec<_>>();
+            let (skipped, bytes) = dry_run_counts(&posts, dir);
+            (posts.len(), bytes, skipped)
+        }
+        Some(Commands::DTags {
+            tags,
+            count,
+            random,
+        }) => {
+            let random = if *random { "order:random" } else { "" };
+            let data = funcs::get_pages(
+                context,
+                login,
+                &client,
+                "",
+                tags.as_deref().unwrap_or_default(),
+                random,
+                &count.unwrap_or(5),
+            );
+            let posts = data.into_iter().flatten().collect::<Vec<_>>();
+            let (skipped, bytes) = dry_run_counts(&posts, dir);
+            (posts.len(), bytes, skipped)
+        }
+        Some(Commands::DPool { pool_id }) => {
+            let posts = funcs::get_pool(context, &client, login, &pool_id.unwrap_or_default())
+                .map(|pool| funcs::get_post_data(context, &client, login, &pool.post_ids))
+                .unwrap_or_default();
+            let (skipped, bytes) = dry_run_counts(&posts, dir);
+            (posts.len(), bytes, skipped)
+        }
+        Some(Commands::Preset {
+            name,
+            count,
+            random,
+        }) => {
+            let preset = match config.presets.get(name) {
+                Some(preset) => preset,
+                None => return,
+            };
+            let data = funcs::get_pages(
+                context,
+                login,
+                &client,
+                "",
+                preset.tags.as_deref().unwrap_or_default(),
+                if *random || preset.random.unwrap_or(false) {
+                    "order:random"
+                } else {
+                    ""
+                },
+                &count.or(preset.count).unwrap_or(5),
+            );
+            let posts = data.into_iter().flatten().collect::<Vec<_>>();
+            let (skipped, bytes) = dry_run_counts(&posts, dir);
+            (posts.len(), bytes, skipped)
+        }
+        _ => return,
+    };
+    println!(
+        "Dry run: {total} posts, {skipped} skipped, estimated {} bytes ({:.2} MB).",
+        bytes,
+        bytes as f64 / 1024.0 / 1024.0
+    );
+    println!("Destination: {}", dir.display());
+    println!("No files or local state were written.");
+}
+
+fn dry_run_counts(posts: &[e_cli::type_defs::api_defs::Post], dir: &Path) -> (usize, u64) {
+    let skipped = posts
+        .iter()
+        .filter(|post| {
+            fs::read_dir(dir)
+                .map(|entries| {
+                    entries.flatten().any(|entry| {
+                        entry
+                            .file_name()
+                            .to_string_lossy()
+                            .contains(&format!("-{}.{}", post.id, post.file.ext))
+                    })
+                })
+                .unwrap_or(false)
+        })
+        .count();
+    let bytes = posts.iter().filter_map(|post| post.file.size).sum();
+    (skipped, bytes)
 }
 
 fn check_update_cmd() {

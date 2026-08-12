@@ -8,9 +8,14 @@ fn dummy_post(id: u64) -> Post {
         file: ApiFile {
             ext: "jpg".into(),
             url: Some(format!("http://example.invalid/{id}.jpg")),
+            md5: None,
+            size: None,
+            width: None,
+            height: None,
         },
         tags: Tags {
             artist: vec!["someartist".into()],
+            general: vec![],
         },
         sample: Sample {
             has: false,
@@ -19,6 +24,7 @@ fn dummy_post(id: u64) -> Post {
                 lower_quality: None,
             },
         },
+        description: None,
     }
 }
 

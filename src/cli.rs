@@ -9,8 +9,11 @@ pub const DL_DIR: &str = "./dl/";
 
 #[derive(Parser)]
 #[command(about = "A fast, multi-threaded downloader for e926/e621-style booru APIs.")]
-#[command(version, long_about = "e-cli downloads posts from e926.net/e621.net by user favorites, tag search, or pool, using multiple threads to download \
-    files in parallel. Supports optional authenticated login and a lower-quality fallback mode.")]
+#[command(
+    version,
+    long_about = "e-cli downloads posts from e926.net/e621.net by user favorites, tag search, or pool, using multiple threads to download \
+    files in parallel. Supports optional authenticated login and a lower-quality fallback mode."
+)]
 #[command(arg_required_else_help = true)]
 #[command(after_help = "EXAMPLES:\n  \
     e-cli d-tags \"scalie\" -c 250 -r -p 1        Download 250 random posts tagged 'scalie', 1 page\n  \
@@ -53,6 +56,34 @@ pub struct Args {
 
     #[arg[short = 'T', long, global = true, help = "Path to a tracking file that records downloaded post IDs, so re-runs only download new posts. Created if it doesn't exist."]]
     pub track_file: Option<PathBuf>,
+
+    #[arg(long, global = true, help = "Plan downloads and print a summary without writing files.", action = ArgAction::SetTrue)]
+    pub dry_run: bool,
+    #[arg(
+        long,
+        global = true,
+        help = "Write a JSON metadata manifest to this path."
+    )]
+    pub manifest: Option<PathBuf>,
+    #[arg(
+        long,
+        global = true,
+        help = "Persistent JSON MD5 duplicate index path."
+    )]
+    pub duplicate_index: Option<PathBuf>,
+    #[arg(
+        long,
+        global = true,
+        default_value_t = 3,
+        help = "Maximum retries for transient download failures."
+    )]
+    pub retries: u32,
+    #[arg(
+        long,
+        global = true,
+        help = "Persistent failed-download manifest path."
+    )]
+    pub failure_manifest: Option<PathBuf>,
 }
 
 #[derive(Subcommand, PartialEq, Eq)]
@@ -101,6 +132,16 @@ pub enum Commands {
         #[arg[short = 'f', long, value_enum, help = "Archive format to use."]]
         format: Option<ArchiveFormat>,
     },
+    #[command(about = "Runs a named tag-search preset from config.toml.")]
+    Preset {
+        name: String,
+        #[arg(short = 'c')]
+        count: Option<u32>,
+        #[arg(short = 'r', action = ArgAction::SetTrue)]
+        random: bool,
+    },
+    #[command(about = "Retries posts recorded in the failed-download manifest.")]
+    RetryFailed,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -194,23 +235,57 @@ pub fn apply_config(args: &mut Args, config: &Config) -> Result<(), String> {
             if name.is_none() {
                 *name = config.zip.name.clone();
             }
-            if format.is_none() {
-                if let Some(value) = config.zip.format.as_deref() {
-                    *format = Some(match value {
-                        "zip" => ArchiveFormat::Zip,
-                        "7z" => ArchiveFormat::SevenZip,
-                        "cbz" => ArchiveFormat::Cbz,
-                        _ => {
-                            return Err(format!(
-                                "Invalid zip format '{value}' in the config; expected zip, 7z, or cbz."
-                            ));
-                        }
-                    });
-                }
+            if format.is_none()
+                && let Some(value) = config.zip.format.as_deref()
+            {
+                *format = Some(match value {
+                    "zip" => ArchiveFormat::Zip,
+                    "7z" => ArchiveFormat::SevenZip,
+                    "cbz" => ArchiveFormat::Cbz,
+                    _ => {
+                        return Err(format!(
+                            "Invalid zip format '{value}' in the config; expected zip, 7z, or cbz."
+                        ));
+                    }
+                });
             }
         }
-        Some(Commands::Config) | Some(Commands::ClearDl) | Some(Commands::CheckUpdate) | None => {
+        Some(Commands::Preset {
+            name,
+            count,
+            random,
+        }) => {
+            let preset = config
+                .presets
+                .get(name)
+                .ok_or_else(|| format!("Unknown preset '{name}'."))?;
+            if args.pages.is_none() {
+                args.pages = preset.pages;
+            }
+            if args.dir.is_none() {
+                args.dir = preset.dir.clone();
+            }
+            if args.track_file.is_none() {
+                args.track_file = preset.track_file.clone();
+            }
+            if !args.lower_quality {
+                args.lower_quality = preset.lower_quality.unwrap_or(false);
+            }
+            if !args.nsfw {
+                args.nsfw = preset.nsfw.unwrap_or(false);
+            }
+            if count.is_none() {
+                *count = preset.count;
+            }
+            if !*random {
+                *random = preset.random.unwrap_or(false);
+            }
         }
+        Some(Commands::Config)
+        | Some(Commands::ClearDl)
+        | Some(Commands::CheckUpdate)
+        | Some(Commands::RetryFailed)
+        | None => {}
     }
     Ok(())
 }
@@ -221,9 +296,7 @@ pub fn fill_defaults(args: &mut Args) -> Result<(), String> {
     args.dir.get_or_insert_with(|| DL_DIR.to_owned());
 
     match &mut args.command {
-        Some(Commands::DFavs {
-            count, tags, ..
-        }) => {
+        Some(Commands::DFavs { count, tags, .. }) => {
             count.get_or_insert(5);
             tags.get_or_insert_with(String::new);
         }
@@ -233,6 +306,7 @@ pub fn fill_defaults(args: &mut Args) -> Result<(), String> {
         Some(Commands::Zip { format, .. }) => {
             format.get_or_insert(ArchiveFormat::Zip);
         }
+        Some(Commands::Preset { .. }) => {}
         _ => {}
     }
     Ok(())
@@ -271,6 +345,9 @@ pub fn validate_args(args: &Args) -> Result<(), String> {
         }
         Some(Commands::DPool { pool_id }) if pool_id.is_none() => {
             return Err("d-pool requires a pool ID argument or a configured pool_id.".into());
+        }
+        Some(Commands::Preset { name, .. }) if name.is_empty() => {
+            return Err("preset requires a name.".into());
         }
         Some(Commands::Zip { name, .. }) if name.is_none() => {
             return Err("zip requires a name argument or a configured name.".into());

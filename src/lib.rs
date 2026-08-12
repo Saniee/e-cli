@@ -13,7 +13,10 @@
 pub mod cli;
 pub mod commands;
 pub mod config;
+pub mod duplicate;
+pub mod failure_manifest;
 pub mod funcs;
+pub mod manifest;
 pub mod tracker;
 pub mod type_defs;
 pub mod update;
@@ -40,6 +43,20 @@ pub struct DownloadStatistics {
     pub total: usize,
     /// Total bytes written across all successfully downloaded files.
     pub downloaded_amount: f64,
+    pub records: Vec<DownloadRecord>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DownloadRecord {
+    pub post_id: u64,
+    pub source_url: Option<String>,
+    pub md5: Option<String>,
+    pub artist: String,
+    pub extension: String,
+    pub local_filename: Option<String>,
+    pub status: String,
+    pub bytes: u64,
+    pub error: Option<String>,
 }
 
 /// Request-scoped settings shared by every download operation: which API variant
@@ -57,6 +74,8 @@ pub struct CliContext {
     /// Number of threads to use for parallel downloads (expected to be `1..=10`;
     /// see [`cli::validate_args`] for the CLI-level bound).
     pub num_threads: usize,
+    pub retries: u32,
+    pub duplicate_index: Option<std::sync::Arc<duplicate::DuplicateIndex>>,
 }
 
 impl CliContext {

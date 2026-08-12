@@ -17,6 +17,12 @@ It aims to be:
 - [x] Optional authenticated login for better-quality fetching.
 - [x] Live progress bars for downloads.
 - [x] Optional tracking file (`-T`) that records downloaded post IDs, so re-runs only fetch new posts.
+- [x] Resumable `.part` downloads with bounded retries and nonzero failure exit status.
+- [x] Dry-run summaries with post counts and estimated download sizes.
+- [x] Optional JSON metadata manifests (`--manifest`).
+- [x] Persistent MD5 duplicate detection.
+- [x] Named TOML tag presets (`preset <name>`).
+- [x] Persistent failed-download retry (`retry-failed`).
 
 ## What it isn't.
 ### A fully GUI App. However that is here (thanks to the rust lib):
@@ -33,6 +39,9 @@ e-cli d-favs someuser -c 100 -T seen.txt    Download favorites, skipping posts t
 e-cli zip -n Cloudjumping -f cbz            Package ./dl/ into Cloudjumping.cbz
 e-cli clear-dl                              Delete the ./dl/ output directory
 e-cli config                                 Create or edit the TOML configuration
+e-cli d-tags "scalie" -p 1 --dry-run        Show the planned work without writing files
+e-cli d-tags "scalie" -p 1 --manifest run.json  Export download metadata
+e-cli retry-failed                          Retry the previous failed downloads
 ```
 
 Run `e-cli --help` or `e-cli <command> --help` for the full list of flags.
@@ -44,6 +53,21 @@ subcommand defaults. The file is located at `%APPDATA%\e-cli\config.toml` on Win
 `$XDG_CONFIG_HOME/e-cli/config.toml` on Linux, falling back to `~/.config/e-cli/config.toml`.
 The command uses the editor named by the `EDITOR` environment variable. Command-line values
 override values from the configuration file.
+
+Downloads first use a temporary `.part` file. Interrupted files are resumed when the
+server supports HTTP ranges, and otherwise restarted safely. Failed posts are stored in
+`.e-cli-failed.json` inside the destination directory by default. The MD5 index is stored
+in `.e-cli-md5.json` in the destination directory by default.
+
+Tag presets use `[presets.<name>]` sections in `config.toml`, for example:
+
+```toml
+[presets.art]
+tags = "dragon"
+count = 25
+pages = 1
+random = false
+```
 
 Packaging a pool into an archive (`zip`) shells out to the `7z` executable, which must be available on your `PATH`.
 

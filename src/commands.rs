@@ -77,8 +77,7 @@ pub fn download_favourites(
     let tags: &str = if !tags.is_empty() { tags } else { "" };
     let fav: String = format!("fav:{}", username);
     info!("Getting posts from pages!");
-    let data: Vec<Vec<Post>> =
-        get_pages(context, login, &client, &fav, tags, random_check, count);
+    let data: Vec<Vec<Post>> = get_pages(context, login, &client, &fav, tags, random_check, count);
     if data.is_empty() {
         error!("No posts found...");
         return DownloadStatistics::default();
@@ -91,6 +90,7 @@ pub fn download_favourites(
     let mut finished: i64 = 0;
     let mut failed: i64 = 0;
     let mut skipped: i64 = 0;
+    let mut records = Vec::new();
     let chunk_size = context.num_threads as i32;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
@@ -108,7 +108,7 @@ pub fn download_favourites(
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
                     let count = posts.len() as u64;
-                    let result = funcs::download(
+                    let result = funcs::download_with_options(
                         &client,
                         login,
                         posts.to_vec(),
@@ -116,6 +116,10 @@ pub fn download_favourites(
                         low_quality,
                         output_dir,
                         tracker,
+                        funcs::DownloadOptions {
+                            retries: context.retries,
+                            duplicate_index: context.duplicate_index.as_deref(),
+                        },
                     );
                     bar.inc(count);
                     result
@@ -129,6 +133,7 @@ pub fn download_favourites(
             failed += status.amount_failed;
             skipped += status.amount_skipped;
             full_sum += status.amount;
+            records.extend(status.records);
         }
     }
     bar.finish_with_message("Done!");
@@ -138,6 +143,7 @@ pub fn download_favourites(
         skipped,
         total,
         downloaded_amount: full_sum,
+        records,
     }
 }
 
@@ -184,6 +190,7 @@ pub fn download_search(
     let mut finished: i64 = 0;
     let mut failed: i64 = 0;
     let mut skipped: i64 = 0;
+    let mut records = Vec::new();
     let chunk_size = context.num_threads as i32;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(context.num_threads)
@@ -202,7 +209,7 @@ pub fn download_search(
                 .map(|posts| {
                     let low_quality = &context.lower_quality;
                     let count = posts.len() as u64;
-                    let result = funcs::download(
+                    let result = funcs::download_with_options(
                         &client,
                         login,
                         posts.to_vec(),
@@ -210,6 +217,10 @@ pub fn download_search(
                         low_quality,
                         output_dir,
                         tracker,
+                        funcs::DownloadOptions {
+                            retries: context.retries,
+                            duplicate_index: context.duplicate_index.as_deref(),
+                        },
                     );
                     bar.inc(count);
                     result
@@ -223,6 +234,7 @@ pub fn download_search(
             failed += status.amount_failed;
             skipped += status.amount_skipped;
             full_sum += status.amount;
+            records.extend(status.records);
         }
     }
     bar.finish_with_message("Done!");
@@ -232,6 +244,7 @@ pub fn download_search(
         skipped,
         total,
         downloaded_amount: full_sum,
+        records,
     }
 }
 
@@ -278,12 +291,13 @@ pub fn download_pool(
         }
         info!("Downloading {} posts...", data.post_ids.len());
         let mut posts_sorted = posts_indexed.into_iter().collect::<Vec<_>>();
-        posts_sorted.sort_by(|a, b| a.0.cmp(&b.0));
+        posts_sorted.sort_by_key(|a| a.0);
         let bar = new_progress_bar(mp, posts_sorted.len() as u64);
         let mut full_sum = 0.0;
         let mut finished: i64 = 0;
         let mut failed: i64 = 0;
         let mut skipped: i64 = 0;
+        let mut records = Vec::new();
         let chunk_size = context.num_threads as i32;
         let sliced_posts = slice_pool_posts(posts_sorted, chunk_size);
         let pool = rayon::ThreadPoolBuilder::new()
@@ -301,9 +315,10 @@ pub fn download_pool(
                         amount_failed: 0,
                         amount_skipped: 0,
                         amount: 0.0,
+                        records: Vec::new(),
                     };
                     for (index, post) in chunk {
-                        let result = funcs::download(
+                        let result = funcs::download_with_options(
                             &client,
                             login,
                             vec![post],
@@ -311,6 +326,10 @@ pub fn download_pool(
                             &context.lower_quality,
                             output_dir,
                             tracker,
+                            funcs::DownloadOptions {
+                                retries: context.retries,
+                                duplicate_index: context.duplicate_index.as_deref(),
+                            },
                         );
                         sum.amount_finished += result.amount_finished;
                         sum.amount_failed += result.amount_failed;
@@ -329,6 +348,7 @@ pub fn download_pool(
             failed += status.amount_failed;
             skipped += status.amount_skipped;
             full_sum += status.amount;
+            records.extend(status.records);
         }
         bar.finish_with_message("Done!");
 
@@ -338,6 +358,7 @@ pub fn download_pool(
             skipped,
             total: data.post_ids.len(),
             downloaded_amount: full_sum,
+            records,
         }
     } else {
         DownloadStatistics::default()
@@ -366,17 +387,18 @@ pub fn zip_downloads(dir: &Path, name: &str, format: ArchiveFormat) -> bool {
         ArchiveFormat::SevenZip => run_7z(dir, &safe_name, "7z", "7z"),
         ArchiveFormat::Cbz => {
             run_7z(dir, &safe_name, "zip", "zip")
-                && fs::rename(
-                    format!("./{safe_name}.zip"),
-                    format!("./{safe_name}.cbz"),
-                )
-                .map_err(|e| error!("Failed to rename archive to .cbz: {e}"))
-                .is_ok()
+                && fs::rename(format!("./{safe_name}.zip"), format!("./{safe_name}.cbz"))
+                    .map_err(|e| error!("Failed to rename archive to .cbz: {e}"))
+                    .is_ok()
         }
     };
 
     if ok {
-        info!("Packaged {} into '{safe_name}.{}'.", dir.display(), format.extension());
+        info!(
+            "Packaged {} into '{safe_name}.{}'.",
+            dir.display(),
+            format.extension()
+        );
     }
     ok
 }
