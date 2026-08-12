@@ -5,6 +5,7 @@ use std::{
     fs,
     fs::create_dir_all,
     io::Write,
+    sync::mpsc,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -636,7 +637,9 @@ pub fn get_pages(
             );
             debug!(target);
 
-            let res = send_request(client, login, &target);
+            let Some(res) = request(context, client, login, &target) else {
+                break;
+            };
             if let Err(e) = res.error_for_status_ref() {
                 error!("Response returned: {}", e);
                 break;
@@ -666,7 +669,9 @@ pub fn get_pages(
                 pages + 1
             );
 
-            let res = send_request(client, login, &target);
+            let Some(res) = request(context, client, login, &target) else {
+                break;
+            };
             if let Err(e) = res.error_for_status_ref() {
                 error!("Response returned: {}", e);
                 break;
@@ -699,7 +704,7 @@ pub fn get_pool(
         context.api_source(),
         pool_id
     );
-    let res = send_request(client, login, &target);
+    let res = request(context, client, login, &target)?;
     if let Err(e) = res.error_for_status_ref() {
         error!("Response returned: {}", e);
         return None;
@@ -734,7 +739,9 @@ pub fn get_post_data(
             context.api_source(),
             id
         );
-        let data = send_request(client, login, &target);
+        let Some(data) = request(context, client, login, &target) else {
+            return Vec::new();
+        };
         if let Err(e) = data.error_for_status_ref() {
             error!("Response returned: {}", e);
             return Vec::new();
@@ -765,6 +772,49 @@ pub fn send_request(client: &Client, login: &Login, target: &str) -> Response {
             .expect("Error getting response!")
     } else {
         client.get(target).send().expect("Error getting response!")
+    }
+}
+
+fn request(context: &CliContext, client: &Client, login: &Login, target: &str) -> Option<Response> {
+    let Some(cancel) = context.cancel.clone() else {
+        return Some(send_request(client, login, target));
+    };
+    if cancel.load(Ordering::Relaxed) {
+        return None;
+    }
+
+    let client = client.clone();
+    let login = Login {
+        username: login.username.clone(),
+        api_key: login.api_key.clone(),
+    };
+    let target = target.to_owned();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = if !login.username.is_empty() && !login.api_key.is_empty() {
+            client
+                .get(&target)
+                .basic_auth(login.username, Some(login.api_key))
+                .send()
+        } else {
+            client.get(&target).send()
+        };
+        let _ = tx.send(result);
+    });
+
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return None;
+        }
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(Ok(response)) => return Some(response),
+            Ok(Err(error)) => {
+                error!("Error getting response: {error}");
+                return None;
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => return None,
+        }
     }
 }
 
