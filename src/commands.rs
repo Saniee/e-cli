@@ -19,6 +19,25 @@ use crate::tracker::Tracker;
 use crate::type_defs::api_defs::{self, Post};
 use crate::{AGENT, CliContext, DownloadStatistics, Login};
 
+fn report_progress(
+    context: &CliContext,
+    completed: i64,
+    failed: i64,
+    skipped: i64,
+    total: usize,
+    downloaded_amount: f64,
+) {
+    if let Some(observer) = &context.progress {
+        observer(crate::DownloadProgress {
+            completed,
+            failed,
+            skipped,
+            total,
+            downloaded_amount,
+        });
+    }
+}
+
 /// Builds a `reqwest::blocking::Client` configured with e-cli's `User-Agent` and
 /// no request timeout (downloads of large files can legitimately take a while).
 /// Callers should build one client per top-level operation and reuse it across
@@ -119,6 +138,7 @@ pub fn download_favourites(
                         funcs::DownloadOptions {
                             retries: context.retries,
                             duplicate_index: context.duplicate_index.as_deref(),
+                            cancel: context.cancel.clone(),
                         },
                     );
                     bar.inc(count);
@@ -134,6 +154,7 @@ pub fn download_favourites(
             skipped += status.amount_skipped;
             full_sum += status.amount;
             records.extend(status.records);
+            report_progress(context, finished, failed, skipped, total, full_sum);
         }
     }
     bar.finish_with_message("Done!");
@@ -220,6 +241,7 @@ pub fn download_search(
                         funcs::DownloadOptions {
                             retries: context.retries,
                             duplicate_index: context.duplicate_index.as_deref(),
+                            cancel: context.cancel.clone(),
                         },
                     );
                     bar.inc(count);
@@ -235,6 +257,7 @@ pub fn download_search(
             skipped += status.amount_skipped;
             full_sum += status.amount;
             records.extend(status.records);
+            report_progress(context, finished, failed, skipped, total, full_sum);
         }
     }
     bar.finish_with_message("Done!");
@@ -329,6 +352,7 @@ pub fn download_pool(
                             funcs::DownloadOptions {
                                 retries: context.retries,
                                 duplicate_index: context.duplicate_index.as_deref(),
+                                cancel: context.cancel.clone(),
                             },
                         );
                         sum.amount_finished += result.amount_finished;
@@ -349,6 +373,14 @@ pub fn download_pool(
             skipped += status.amount_skipped;
             full_sum += status.amount;
             records.extend(status.records);
+            report_progress(
+                context,
+                finished,
+                failed,
+                skipped,
+                data.post_ids.len(),
+                full_sum,
+            );
         }
         bar.finish_with_message("Done!");
 

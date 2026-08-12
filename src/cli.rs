@@ -88,6 +88,8 @@ pub struct Args {
 
 #[derive(Subcommand, PartialEq, Eq)]
 pub enum Commands {
+    #[command(about = "Opens the interactive terminal UI.")]
+    Tui,
     #[command(about = "Opens the global TOML configuration file in the default editor.")]
     Config,
     #[command[about = "Checks whether a newer e-cli release is available on GitHub."]]
@@ -282,6 +284,7 @@ pub fn apply_config(args: &mut Args, config: &Config) -> Result<(), String> {
             }
         }
         Some(Commands::Config)
+        | Some(Commands::Tui)
         | Some(Commands::ClearDl)
         | Some(Commands::CheckUpdate)
         | Some(Commands::RetryFailed)

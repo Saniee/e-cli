@@ -1,7 +1,17 @@
 use std::path::Path;
 
 use std::fs::{File, OpenOptions};
-use std::{fs, fs::create_dir_all, io::Write, thread, time::Duration};
+use std::{
+    fs,
+    fs::create_dir_all,
+    io::Write,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
+    time::Duration,
+};
 
 use reqwest::blocking::{Client, Response};
 use tracing::{Level, debug, error, info, span, warn};
@@ -57,6 +67,7 @@ impl DownloadFinished {
 pub struct DownloadOptions<'a> {
     pub retries: u32,
     pub duplicate_index: Option<&'a crate::duplicate::DuplicateIndex>,
+    pub cancel: Option<Arc<AtomicBool>>,
 }
 
 /// Downloads a batch of posts into `output_dir`, skipping (and counting in
@@ -92,6 +103,7 @@ pub fn download(
         DownloadOptions {
             retries: 3,
             duplicate_index: None,
+            cancel: None,
         },
     )
 }
@@ -117,6 +129,13 @@ pub fn download_with_options(
     let mut records = Vec::new();
 
     for post in data {
+        if options
+            .cancel
+            .as_ref()
+            .is_some_and(|cancel| cancel.load(Ordering::Relaxed))
+        {
+            break;
+        }
         let artist_name = post.tags.parse_artists();
 
         if let Some(tracker) = tracker

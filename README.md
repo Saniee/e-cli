@@ -23,10 +23,13 @@ It aims to be:
 - [x] Persistent MD5 duplicate detection.
 - [x] Named TOML tag presets (`preset <name>`).
 - [x] Persistent failed-download retry (`retry-failed`).
+- [x] Interactive terminal UI (`tui`) with background downloads and editable settings.
 
-## What it isn't.
-### A fully GUI App. However that is here (thanks to the rust lib):
+## Other notable things:
 [GUI App](https://github.com/Saniee/e-cli-gui)
+
+Or just run:
+`e-cli tui`
 
 ## Usage
 
@@ -42,6 +45,7 @@ e-cli config                                 Create or edit the TOML configurati
 e-cli d-tags "scalie" -p 1 --dry-run        Show the planned work without writing files
 e-cli d-tags "scalie" -p 1 --manifest run.json  Export download metadata
 e-cli retry-failed                          Retry the previous failed downloads
+e-cli tui                                   Open the interactive terminal UI
 ```
 
 Run `e-cli --help` or `e-cli <command> --help` for the full list of flags.
@@ -53,6 +57,10 @@ subcommand defaults. The file is located at `%APPDATA%\e-cli\config.toml` on Win
 `$XDG_CONFIG_HOME/e-cli/config.toml` on Linux, falling back to `~/.config/e-cli/config.toml`.
 The command uses the editor named by the `EDITOR` environment variable. Command-line values
 override values from the configuration file.
+
+Run `e-cli tui` for an interactive keyboard-driven interface. Use Left/Right to change the
+download source, Up/Down to select a setting, Enter to edit, Space to start, `s` to save
+configuration, Esc to request cancellation, and `q` to quit.
 
 Downloads first use a temporary `.part` file. Interrupted files are resumed when the
 server supports HTTP ranges, and otherwise restarted safely. Failed posts are stored in

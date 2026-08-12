@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE: &str = "config.toml";
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub global: GlobalConfig,
@@ -22,7 +22,7 @@ pub struct Config {
     pub presets: HashMap<String, PresetConfig>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GlobalConfig {
     pub verbose: Option<bool>,
@@ -35,7 +35,7 @@ pub struct GlobalConfig {
     pub track_file: Option<PathBuf>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FavouritesConfig {
     pub username: Option<String>,
@@ -44,7 +44,7 @@ pub struct FavouritesConfig {
     pub tags: Option<String>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TagsConfig {
     pub tags: Option<String>,
@@ -52,13 +52,13 @@ pub struct TagsConfig {
     pub random: Option<bool>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PoolConfig {
     pub pool_id: Option<u64>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ZipConfig {
     pub name: Option<String>,

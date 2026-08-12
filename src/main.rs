@@ -20,6 +20,8 @@ use tracing_subscriber::{
     EnvFilter, Layer, fmt, fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
+mod tui;
+
 /// A `tracing` writer that suspends any active `indicatif` progress bars
 /// while a log line is written, so bar rendering doesn't get clobbered.
 #[derive(Clone)]
@@ -45,6 +47,14 @@ impl<'a> MakeWriter<'a> for ProgressWriter {
 
 fn main() {
     let mut args = cli::Args::parse();
+
+    if matches!(&args.command, Some(Commands::Tui)) {
+        if let Err(e) = tui::run() {
+            eprintln!("{e}");
+            process::exit(1);
+        }
+        return;
+    }
 
     if matches!(&args.command, Some(Commands::Config)) {
         if let Err(e) = config::open() {
@@ -99,6 +109,8 @@ fn main() {
                 Err(e) => return error!("Failed to open duplicate index {}: {e}", path.display()),
             }
         },
+        cancel: None,
+        progress: None,
     };
     let mp = MultiProgress::new();
     let progress_writer = ProgressWriter(mp.clone());
@@ -204,6 +216,7 @@ fn main() {
 
     match &args.command {
         Some(Commands::Config) => return,
+        Some(Commands::Tui) => return,
         Some(Commands::CheckUpdate) => return,
         Some(Commands::ClearDl) => {
             if !dl_dir.exists() {
@@ -317,6 +330,8 @@ fn main() {
                 num_threads: context.num_threads,
                 retries: manifest.retries,
                 duplicate_index: retry_duplicate,
+                cancel: None,
+                progress: None,
             };
             let client = commands::get_client();
             let ids = manifest
@@ -336,6 +351,7 @@ fn main() {
                 funcs::DownloadOptions {
                     retries: manifest.retries,
                     duplicate_index: context.duplicate_index.as_deref(),
+                    cancel: None,
                 },
             )
             .into_statistics(ids.len());

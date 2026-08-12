@@ -29,7 +29,7 @@ pub static AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VE
 /// Aggregate result of a download operation, returned by
 /// [`commands::download_favourites`], [`commands::download_search`], and
 /// [`commands::download_pool`].
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct DownloadStatistics {
     /// Number of posts successfully downloaded.
     pub completed: i64,
@@ -45,6 +45,17 @@ pub struct DownloadStatistics {
     pub downloaded_amount: f64,
     pub records: Vec<DownloadRecord>,
 }
+
+#[derive(Clone, Debug)]
+pub struct DownloadProgress {
+    pub completed: i64,
+    pub failed: i64,
+    pub skipped: i64,
+    pub total: usize,
+    pub downloaded_amount: f64,
+}
+
+pub type ProgressObserver = std::sync::Arc<dyn Fn(DownloadProgress) + Send + Sync>;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DownloadRecord {
@@ -76,6 +87,9 @@ pub struct CliContext {
     pub num_threads: usize,
     pub retries: u32,
     pub duplicate_index: Option<std::sync::Arc<duplicate::DuplicateIndex>>,
+    /// Cooperative cancellation requested by an interactive frontend.
+    pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    pub progress: Option<ProgressObserver>,
 }
 
 impl CliContext {

@@ -58,6 +58,7 @@ fn track_file_accepts_custom_value() {
 #[test]
 fn all_subcommands_parse() {
     assert!(matches!(parse(&["config"]).command, Some(Commands::Config)));
+    assert!(matches!(parse(&["tui"]).command, Some(Commands::Tui)));
     assert!(matches!(
         parse(&["clear-dl"]).command,
         Some(Commands::ClearDl)
