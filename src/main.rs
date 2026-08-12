@@ -543,12 +543,19 @@ fn check_update_cmd() {
 }
 
 fn finish(statistics: DownloadStatistics, timer: Instant) {
+    let elapsed = timer.elapsed().as_secs_f64();
+    let speed = if elapsed > 0.0 {
+        statistics.downloaded_amount / elapsed / 1024.0 / 1024.0
+    } else {
+        0.0
+    };
     info!(
-        "Finished! Downloaded: {} Posts. Skipped: {} already-downloaded Posts. Couldn't Download: {} Posts. Total data downloaded: {:.2} MB, in {} seconds.",
+        "Finished! Downloaded: {} Posts. Skipped: {} already-downloaded Posts. Couldn't Download: {} Posts. Total data downloaded: {:.2} MB at {:.2} MB/s, in {} seconds.",
         statistics.completed,
         statistics.skipped,
         statistics.failed,
         statistics.downloaded_amount / 1024.0 / 1024.0,
+        speed,
         timer.elapsed().as_secs(),
     );
 }

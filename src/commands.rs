@@ -56,9 +56,11 @@ pub fn get_client() -> Client {
 fn new_progress_bar(mp: &MultiProgress, total: u64) -> ProgressBar {
     let bar = mp.add(ProgressBar::new(total));
     bar.set_style(
-        ProgressStyle::with_template("{spinner} [{bar:40}] {pos}/{len} files ({eta})")
-            .expect("Invalid progress bar template")
-            .progress_chars("#>-"),
+        ProgressStyle::with_template(
+            "{spinner} [{bar:40}] {pos}/{len} files ({per_sec}/s, ETA {eta})",
+        )
+        .expect("Invalid progress bar template")
+        .progress_chars("#>-"),
     );
     bar
 }
