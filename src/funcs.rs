@@ -799,9 +799,10 @@ fn request(context: &CliContext, client: &Client, login: &Login, target: &str) -
             client
                 .get(&target)
                 .basic_auth(login.username, Some(login.api_key))
+                .timeout(Duration::from_secs(30))
                 .send()
         } else {
-            client.get(&target).send()
+            client.get(&target).timeout(Duration::from_secs(30)).send()
         };
         let _ = tx.send(result);
     });
